@@ -5169,7 +5169,9 @@ function TrackerDetail({
           <section className="mt-7">
             <h2 className="mb-3 text-sm font-semibold">Description</h2>
             {item.description.trim() ? (
-              <Markdown content={item.description} />
+              <div className="tb-markdown-body min-w-0 max-w-full overflow-x-auto">
+                <Markdown content={item.description} />
+              </div>
             ) : (
               <p className="text-sm text-muted-foreground">
                 No description provided.
@@ -5194,7 +5196,9 @@ function TrackerDetail({
                       </span>
                       <time>{formatUpdatedAt(comment.createdAt)}</time>
                     </div>
-                    <Markdown content={comment.body} />
+                    <div className="tb-markdown-body min-w-0 max-w-full overflow-x-auto">
+                      <Markdown content={comment.body} />
+                    </div>
                   </article>
                 ))}
               </div>

@@ -122,6 +122,33 @@
     overflow-wrap: anywhere;
   }
 
+  .tb-markdown-body {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .tb-markdown-body :where(table) {
+    display: block;
+    width: max-content;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+  }
+
+  .tb-markdown-body :where(pre) {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .tb-markdown-body :where(img) {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .tb-markdown-body :where(p, li, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+
   .tb-search-shell {
     background: color-mix(in oklch, var(--canvas) 99.1%, var(--ink) 0.9%);
   }
