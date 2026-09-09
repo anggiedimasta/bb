@@ -3279,6 +3279,18 @@ function epicSortValue(item: WorkItem): string {
   return item.epicExpectedStart ?? item.epicExpectedDone ?? '\uffff';
 }
 
+function applyJiraWindow(jql: string, window: string): string {
+  const stripped = jql.replace(/\s+AND\s+updated\s*>=\s*-\S+/giu, '');
+  if (window === 'all') return stripped.trim();
+  const orderMatch = /\s+ORDER\s+BY\s+.*$/iu.exec(stripped);
+  if (orderMatch) {
+    const head = stripped.slice(0, orderMatch.index).trimEnd();
+    const order = stripped.slice(orderMatch.index).trim();
+    return `${head} AND updated >= -${window} ${order}`;
+  }
+  return `${stripped.trim()} AND updated >= -${window}`;
+}
+
 function groupItemsByEpicStory(items: readonly WorkItem[]): Array<{
   epicKey: string | null;
   epicSummary: string | null;
@@ -5672,6 +5684,30 @@ function ProjectConfigForm({
             </label>
             <label className="space-y-1.5 text-xs font-medium @lg:col-span-2">
               Jira JQL
+              <div className="mb-1.5 flex flex-wrap items-center gap-1">
+                <span className="mr-1 text-2xs uppercase tracking-wide text-muted-foreground">
+                  Window
+                </span>
+                {(['2w', '4w', '13w', '26w', '52w', 'all'] as const).map(
+                  win => (
+                    <button
+                      key={win}
+                      type="button"
+                      disabled={saving}
+                      className="tb-count-chip rounded-full px-2 py-0.5 text-2xs font-medium hover:bg-accent"
+                      onClick={() => {
+                        setConfig({
+                          ...config,
+                          jiraJql: applyJiraWindow(config.jiraJql, win)
+                        });
+                        setSaved(false);
+                      }}
+                    >
+                      {win === 'all' ? 'All' : win}
+                    </button>
+                  )
+                )}
+              </div>
               <Textarea
                 aria-label="Jira JQL"
                 value={config.jiraJql}
