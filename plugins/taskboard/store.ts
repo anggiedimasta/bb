@@ -42,6 +42,7 @@ interface WorkItemRow {
   project: string | null;
   labels_json: string;
   updated_at: string;
+  hierarchy_json?: string | null;
 }
 
 interface SyncRow {
@@ -114,8 +115,35 @@ function itemFromRow(row: WorkItemRow): WorkItem {
     assignee: row.assignee,
     project: row.project,
     labels: JSON.parse(row.labels_json),
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
+    ...parseHierarchy(row.hierarchy_json)
   });
+}
+
+function parseHierarchy(value: string | null | undefined): {
+  storyKey?: string | null;
+  storySummary?: string | null;
+  epicKey?: string | null;
+  epicSummary?: string | null;
+  epicExpectedStart?: string | null;
+  epicExpectedDone?: string | null;
+} {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    const str = (v: unknown): string | null =>
+      typeof v === 'string' && v.length > 0 ? v : null;
+    return {
+      storyKey: str(parsed.storyKey),
+      storySummary: str(parsed.storySummary),
+      epicKey: str(parsed.epicKey),
+      epicSummary: str(parsed.epicSummary),
+      epicExpectedStart: str(parsed.epicExpectedStart),
+      epicExpectedDone: str(parsed.epicExpectedDone)
+    };
+  } catch {
+    return {};
+  }
 }
 
 function configFromRow(row: ProjectConfigRow): ProjectSourceConfig {
@@ -410,6 +438,9 @@ export function createWorkItemStore(bb: BbPluginApi) {
         ON project_filter_presets(
           bb_project_id, position, created_at, id
         );
+    `,
+    `
+      ALTER TABLE work_items_by_project ADD COLUMN hierarchy_json TEXT;
     `
   ]);
 
@@ -428,14 +459,15 @@ export function createWorkItemStore(bb: BbPluginApi) {
       string | null,
       string | null,
       string,
-      string
+      string,
+      string | null
     ]
   >(`
     INSERT INTO work_items_by_project (
       bb_project_id, source, locator, item_key, title, description, url,
       status, state_category, priority, assignee, project, labels_json,
-      updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      updated_at, hierarchy_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(bb_project_id, source, locator) DO UPDATE SET
       item_key = excluded.item_key,
       title = excluded.title,
@@ -447,11 +479,26 @@ export function createWorkItemStore(bb: BbPluginApi) {
       assignee = excluded.assignee,
       project = excluded.project,
       labels_json = excluded.labels_json,
-      updated_at = excluded.updated_at
+      updated_at = excluded.updated_at,
+      hierarchy_json = excluded.hierarchy_json
   `);
 
   function writeItem(item: WorkItem): void {
     const parsed = workItemSchema.parse(item);
+    const hierarchy =
+      parsed.storyKey ||
+      parsed.epicKey ||
+      parsed.epicExpectedStart ||
+      parsed.epicExpectedDone
+        ? JSON.stringify({
+            storyKey: parsed.storyKey ?? null,
+            storySummary: parsed.storySummary ?? null,
+            epicKey: parsed.epicKey ?? null,
+            epicSummary: parsed.epicSummary ?? null,
+            epicExpectedStart: parsed.epicExpectedStart ?? null,
+            epicExpectedDone: parsed.epicExpectedDone ?? null
+          })
+        : null;
     upsertItem.run(
       parsed.bbProjectId,
       parsed.source,
@@ -466,7 +513,8 @@ export function createWorkItemStore(bb: BbPluginApi) {
       parsed.assignee,
       parsed.project,
       JSON.stringify(parsed.labels),
-      parsed.updatedAt
+      parsed.updatedAt,
+      hierarchy
     );
   }
 

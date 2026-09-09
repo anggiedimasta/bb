@@ -4759,6 +4759,28 @@ function DetailMetadata({
     ['Assignee', item.assignee ?? 'Unassigned'],
     ['External project', item.project ?? 'None'],
     ['Updated', formatUpdatedAt(item.updatedAt)],
+    ...(item.storyKey
+      ? [
+          [
+            'Story',
+            `${item.storyKey}${item.storySummary ? ` · ${item.storySummary}` : ''}`
+          ] as const
+        ]
+      : []),
+    ...(item.epicKey
+      ? [
+          [
+            'Epic',
+            `${item.epicKey}${item.epicSummary ? ` · ${item.epicSummary}` : ''}`
+          ] as const
+        ]
+      : []),
+    ...(item.epicExpectedStart
+      ? [['Expected Start Breakdown', item.epicExpectedStart] as const]
+      : []),
+    ...(item.epicExpectedDone
+      ? [['Expected Done Breakdown', item.epicExpectedDone] as const]
+      : []),
     ...(item.extraFields ?? []).map(
       field => [field.label, field.value] as const
     )

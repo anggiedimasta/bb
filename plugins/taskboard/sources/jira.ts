@@ -444,6 +444,15 @@ interface DerivedWorklogState {
   markers: string[];
 }
 
+interface HierarchyInfo {
+  storyKey: string | null;
+  storySummary: string | null;
+  epicKey: string | null;
+  epicSummary: string | null;
+  epicExpectedStart: string | null;
+  epicExpectedDone: string | null;
+}
+
 const JIRA_EXTRA_FIELDS: ReadonlyArray<{ id: string; label: string }> = [
   { id: 'customfield_10033', label: 'Platform Engineer' },
   { id: 'customfield_11397', label: 'PIC Lead Engineer' },
@@ -529,7 +538,8 @@ function deriveWorklogState(
 function toItem(
   baseUrl: string,
   issue: z.infer<typeof jiraIssueSchema>,
-  derived?: DerivedWorklogState
+  derived?: DerivedWorklogState,
+  hierarchy?: HierarchyInfo
 ): ExternalWorkItemDetail {
   return {
     source: 'jira',
@@ -550,6 +560,12 @@ function toItem(
       : issue.fields.labels,
     updatedAt: issue.fields.updated,
     extraFields: extraFieldsFromIssue(issue),
+    storyKey: hierarchy?.storyKey ?? null,
+    storySummary: hierarchy?.storySummary ?? null,
+    epicKey: hierarchy?.epicKey ?? null,
+    epicSummary: hierarchy?.epicSummary ?? null,
+    epicExpectedStart: hierarchy?.epicExpectedStart ?? null,
+    epicExpectedDone: hierarchy?.epicExpectedDone ?? null,
     comments: (issue.fields.comment?.comments ?? []).map(comment => ({
       author: comment.author.displayName,
       body: adfToMarkdown(comment.body),
@@ -682,6 +698,105 @@ export function createJiraAdapter(options: {
     return results;
   }
 
+  async function loadStoryIssue(
+    key: string
+  ): Promise<{ summary: string | null; epicKey: string | null } | null> {
+    try {
+      const payload = await jiraRequest(
+        auth,
+        `/rest/api/3/issue/${encodeURIComponent(key)}?fields=summary,parent`
+      );
+      const node = payload as {
+        fields?: {
+          summary?: string;
+          parent?: { key?: string };
+        };
+      };
+      return {
+        summary: node.fields?.summary ?? null,
+        epicKey: node.fields?.parent?.key ?? null
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async function loadEpicIssue(
+    key: string
+  ): Promise<{
+    summary: string | null;
+    expectedStart: string | null;
+    expectedDone: string | null;
+  } | null> {
+    try {
+      const payload = await jiraRequest(
+        auth,
+        `/rest/api/3/issue/${encodeURIComponent(key)}?fields=summary,customfield_10360,customfield_10361`
+      );
+      const node = payload as {
+        fields?: {
+          summary?: string;
+          customfield_10360?: string | null;
+          customfield_10361?: string | null;
+        };
+      };
+      return {
+        summary: node.fields?.summary ?? null,
+        expectedStart: node.fields?.customfield_10360 ?? null,
+        expectedDone: node.fields?.customfield_10361 ?? null
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async function loadHierarchyMap(
+    issues: z.infer<typeof jiraIssueSchema>[]
+  ): Promise<Map<string, HierarchyInfo>> {
+    const result = new Map<string, HierarchyInfo>();
+    const storyKeys = new Set<string>();
+    for (const issue of issues) {
+      const parentKey = (issue.fields as { parent?: { key?: string } }).parent
+        ?.key;
+      if (parentKey) storyKeys.add(parentKey);
+    }
+    const uniqueStoryKeys = [...storyKeys];
+    const storyEntries = await mapWithConcurrency(
+      uniqueStoryKeys,
+      6,
+      async key => [key, await loadStoryIssue(key)] as const
+    );
+    const stories = new Map(storyEntries);
+
+    const epicKeys = new Set<string>();
+    for (const [, story] of stories) {
+      if (story?.epicKey) epicKeys.add(story.epicKey);
+    }
+    const epicEntries = await mapWithConcurrency(
+      [...epicKeys],
+      6,
+      async key => [key, await loadEpicIssue(key)] as const
+    );
+    const epics = new Map(epicEntries);
+
+    for (const issue of issues) {
+      const storyKey = (issue.fields as { parent?: { key?: string } }).parent
+        ?.key ?? null;
+      const story = storyKey ? stories.get(storyKey) : null;
+      const epicKey = story?.epicKey ?? null;
+      const epic = epicKey ? epics.get(epicKey) : null;
+      result.set(issue.key, {
+        storyKey,
+        storySummary: story?.summary ?? null,
+        epicKey,
+        epicSummary: epic?.summary ?? null,
+        epicExpectedStart: epic?.expectedStart ?? null,
+        epicExpectedDone: epic?.expectedDone ?? null
+      });
+    }
+    return result;
+  }
+
   async function loadIssue(
     locator: string,
     flags: { comments: boolean; verifyScope: boolean }
@@ -695,6 +810,7 @@ export function createJiraAdapter(options: {
       'assignee',
       'project',
       'labels',
+      'parent',
       'timespent',
       'customfield_10033',
       'customfield_11397',
@@ -956,6 +1072,7 @@ export function createJiraAdapter(options: {
               'assignee',
               'project',
               'labels',
+              'parent',
               'timespent',
               'customfield_10033',
               'customfield_11397',
@@ -990,8 +1107,11 @@ export function createJiraAdapter(options: {
           }
         }
       );
+      const hierarchy = await loadHierarchyMap(issues);
       return issues.map((issue, index) =>
-        withoutComments(toItem(baseUrl, issue, derivedStates[index]))
+        withoutComments(
+          toItem(baseUrl, issue, derivedStates[index], hierarchy.get(issue.key))
+        )
       );
     },
     async get(locator) {
@@ -1007,7 +1127,13 @@ export function createJiraAdapter(options: {
       } catch {
         derived = undefined;
       }
-      return toItem(baseUrl, issue, derived);
+      let hierarchy: HierarchyInfo | undefined;
+      try {
+        hierarchy = (await loadHierarchyMap([issue])).get(issue.key);
+      } catch {
+        hierarchy = undefined;
+      }
+      return toItem(baseUrl, issue, derived, hierarchy);
     },
     async statusOptions(locator) {
       if (!configured) throw new Error('Jira is not configured');

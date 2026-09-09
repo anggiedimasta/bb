@@ -154,7 +154,13 @@ export const workItemSchema = z
     updatedAt: z.string(),
     extraFields: z
       .array(z.object({ label: z.string(), value: z.string() }).strict())
-      .optional()
+      .optional(),
+    storyKey: z.string().nullable().optional(),
+    storySummary: z.string().nullable().optional(),
+    epicKey: z.string().nullable().optional(),
+    epicSummary: z.string().nullable().optional(),
+    epicExpectedStart: z.string().nullable().optional(),
+    epicExpectedDone: z.string().nullable().optional()
   })
   .strict();
 export type WorkItem = z.infer<typeof workItemSchema>;
