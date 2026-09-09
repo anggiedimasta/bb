@@ -53,6 +53,7 @@ import { isRunningThreadRuntimeDisplayStatus } from "@bb/client-core";
 import type {
   ThreadTimelineAddToChatHandler,
   ThreadTimelineEditMessageHandler,
+  ThreadTimelineUndoTurnHandler,
   ThreadTimelineInlineMessageEditor,
   ThreadTimelineForkMessageHandler,
   ThreadTimelineSendToMainMessageHandler,
@@ -149,6 +150,7 @@ export interface ThreadTimelineRowsProps {
   threadOriginKind?: ThreadOriginKind | null;
   onForkMessage?: ThreadTimelineForkMessageHandler;
   onEditMessage?: ThreadTimelineEditMessageHandler;
+  onUndoTurn?: ThreadTimelineUndoTurnHandler;
   inlineMessageEditor?: ThreadTimelineInlineMessageEditor;
   onMessageAddToChat?: ThreadTimelineAddToChatHandler;
   onSendToMainMessage?: ThreadTimelineSendToMainMessageHandler;
@@ -180,6 +182,7 @@ interface TimelineRendererStaticContextValue {
   getViewRows: GetTimelineViewRows;
   onForkMessage: ThreadTimelineForkMessageHandler | undefined;
   onEditMessage: ThreadTimelineEditMessageHandler | undefined;
+  onUndoTurn: ThreadTimelineUndoTurnHandler | undefined;
   inlineMessageEditor: ThreadTimelineInlineMessageEditor | undefined;
   onMessageAddToChat: ThreadTimelineAddToChatHandler | undefined;
   onSendToMainMessage: ThreadTimelineSendToMainMessageHandler | undefined;
@@ -909,6 +912,7 @@ const ConversationRowContent = memo(function ConversationRowContent({
     canSpawnChild,
     inlineMessageEditor,
     onEditMessage,
+    onUndoTurn,
     onForkMessage,
     onMessageAddToChat,
     onSendToMainMessage,
@@ -996,6 +1000,17 @@ const ConversationRowContent = memo(function ConversationRowContent({
           });
         }
       : undefined;
+    const canUndoMessage =
+      onUndoTurn !== undefined &&
+      row.initiator === "user" &&
+      row.turnRequest.status === "accepted";
+    const onUndo = canUndoMessage
+      ? () => {
+          onUndoTurn({
+            targetSequence: row.sourceSeqStart,
+          });
+        }
+      : undefined;
     return (
       <ConversationMessageContent
         attachments={row.attachments}
@@ -1005,6 +1020,7 @@ const ConversationRowContent = memo(function ConversationRowContent({
         mobileActionDisplay={mobileActionDisplay}
         onAddToChat={onSelectionAddToChat}
         onEdit={onEdit}
+        onUndo={onUndo}
         onOpenLink={onOpenLink}
         onOpenLocalFileLink={onOpenLocalFileLink}
         projectId={projectId}
@@ -1046,12 +1062,17 @@ const ConversationRowContent = memo(function ConversationRowContent({
               : { ...selection, sourceSeqEnd: row.sourceSeqEnd },
             messageReference,
           );
+  const onUndo =
+    onUndoTurn === undefined
+      ? undefined
+      : () => onUndoTurn({ targetSequence: row.sourceSeqEnd });
   return (
     <ConversationMessageContent
       attachments={row.attachments}
       id={row.id}
       onAddToChat={onMessageAddToChat}
       onFork={onFork}
+      onUndo={onUndo}
       onSendToMain={onSendToMain}
       forkDisabled={!canSpawnChild}
       onSelectProse={onSelectProse}
@@ -2133,6 +2154,7 @@ function ThreadTimelineRowsForTimelineView(props: ThreadTimelineRowsProps) {
       getViewRows,
       onForkMessage: props.onForkMessage,
       onEditMessage: props.onEditMessage,
+      onUndoTurn: props.onUndoTurn,
       inlineMessageEditor: props.inlineMessageEditor,
       onMessageAddToChat: props.onMessageAddToChat,
       onSendToMainMessage: props.onSendToMainMessage,
@@ -2163,6 +2185,7 @@ function ThreadTimelineRowsForTimelineView(props: ThreadTimelineRowsProps) {
       getViewRows,
       props.onForkMessage,
       props.onEditMessage,
+      props.onUndoTurn,
       props.inlineMessageEditor,
       props.onMessageAddToChat,
       props.onSendToMainMessage,

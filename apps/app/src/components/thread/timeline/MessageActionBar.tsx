@@ -64,6 +64,7 @@ interface MessageActionBarProps {
     attachments?: readonly PromptDraftAttachment[],
   ) => void;
   onEdit?: () => void;
+  onUndo?: () => void;
   onFork?: () => void;
   onSendToMain?: () => void;
   disabled?: boolean;
@@ -71,7 +72,7 @@ interface MessageActionBarProps {
 }
 
 interface MessageOverflowAction {
-  icon: "Copy" | "Edit" | "MessageSquarePlus" | "Fork" | "ArrowTurnBackward";
+  icon: "Copy" | "Edit" | "RotateCcw" | "MessageSquarePlus" | "Fork" | "ArrowTurnBackward";
   plugin?: { pluginId: string | null; icon: string | null };
   key?: string;
   label: string;
@@ -388,6 +389,7 @@ export function MessageActionBar({
   copyImageUrl,
   onAddToChat,
   onEdit,
+  onUndo,
   onFork,
   onSendToMain,
   disabled,
@@ -494,6 +496,16 @@ export function MessageActionBar({
             icon: "Edit" as const,
             label: "Edit message",
             onSelect: onEdit,
+          },
+        ]
+      : []),
+    ...(onUndo
+      ? [
+          {
+            icon: "RotateCcw" as const,
+            label: "Undo turn & revert changes",
+            onSelect: onUndo,
+            disabled,
           },
         ]
       : []),

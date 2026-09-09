@@ -24,12 +24,14 @@ interface SelectionAction {
   plugin?: { pluginId: string | null; icon: string | null };
   key?: string;
   label: string;
+  shortcut?: string;
   onSelect: (selection: MessageProseSelection) => void;
 }
 
 export interface TimelineSelectionMenuProps {
   selection: MessageProseSelection | null;
   onAddToChat?: (text: string) => void;
+  onAddToSideChat?: (text: string) => void;
   pluginActions?: readonly ThreadTimelinePluginMessageAction[];
   onDismiss: () => void;
 }
@@ -99,14 +101,28 @@ function ActionButton({
           aria-hidden="true"
         />
       )}
-      {action.label}
+      <span>{action.label}</span>
+      {action.shortcut ? (
+        <span aria-hidden="true" className="ml-1 rounded border border-border bg-surface-recessed px-1 py-0.5 font-mono text-[10px] text-muted-foreground">
+          {action.shortcut}
+        </span>
+      ) : null}
     </button>
   );
 }
 
+const isMacPlatform =
+  typeof navigator !== "undefined" &&
+  Boolean(
+    (navigator as unknown as { userAgentData?: { platform?: string } })
+      .userAgentData?.platform?.toLowerCase().includes("mac") ||
+      /Macintosh|Mac OS X/i.test(navigator.userAgent),
+  );
+
 export function TimelineSelectionMenu({
   selection,
   onAddToChat,
+  onAddToSideChat,
   pluginActions = [],
   onDismiss,
 }: TimelineSelectionMenuProps) {
@@ -123,6 +139,23 @@ export function TimelineSelectionMenu({
       window.removeEventListener("resize", dismiss);
     };
   }, [open, onDismiss]);
+
+  useEffect(() => {
+    if (!open || !onAddToChat || !selection) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "l") {
+        event.preventDefault();
+        event.stopPropagation();
+        onAddToChat(selection.text);
+        window.getSelection()?.removeAllRanges();
+        onDismiss();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [open, onAddToChat, selection, onDismiss]);
 
   const anchorSide = selection?.anchorSide ?? "top";
   const anchorLeft =
@@ -152,8 +185,19 @@ export function TimelineSelectionMenu({
           {
             icon: "MessageSquarePlus" as const,
             label: "Add to chat",
+            shortcut: isMacPlatform ? "⌘L" : "Ctrl+L",
             onSelect: (currentSelection: MessageProseSelection) =>
               onAddToChat(currentSelection.text),
+          },
+        ]
+      : []),
+    ...(onAddToSideChat
+      ? [
+          {
+            icon: "MessageSquarePlus" as const,
+            label: "Add to Side Chat",
+            onSelect: (currentSelection: MessageProseSelection) =>
+              onAddToSideChat(currentSelection.text),
           },
         ]
       : []),

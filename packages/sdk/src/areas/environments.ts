@@ -4,6 +4,7 @@ import {
   pullRequestDraftActionResponseSchema,
   pullRequestMergeActionResponseSchema,
   pullRequestReadyActionResponseSchema,
+  syncActionResponseSchema,
   updateEnvironmentRequestSchema,
 } from "@bb/server-contract";
 import type {
@@ -25,6 +26,7 @@ import type {
   PullRequestDraftActionResponse,
   PullRequestMergeActionResponse,
   PullRequestReadyActionResponse,
+  SyncActionResponse,
   EnvironmentStatusQuery,
   UpdateEnvironmentRequest,
   WorkspacePathListResponse,
@@ -129,6 +131,7 @@ export interface EnvironmentsArea {
     args: EnvironmentActionArgs,
   ): Promise<EnvironmentArchiveThreadsResult>;
   commit(args: EnvironmentCommitArgs): Promise<EnvironmentCommitResult>;
+  sync(args: EnvironmentActionArgs): Promise<SyncActionResponse>;
   diff(args: EnvironmentDiffArgs): Promise<EnvironmentDiffResult>;
   diffBranches(
     args: EnvironmentDiffBranchesArgs,
@@ -348,6 +351,15 @@ export function createEnvironmentsArea(
         }),
       );
       return pullRequestDraftActionResponseSchema.parse(body);
+    },
+    async sync(input) {
+      const body = await transport.readJson(
+        transport.api.v1.environments[":id"].actions.$post({
+          param: { id: input.environmentId },
+          json: { action: "sync" },
+        }),
+      );
+      return syncActionResponseSchema.parse(body);
     },
     async markPullRequestReady(input) {
       const body = await transport.readJson(

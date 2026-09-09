@@ -138,6 +138,7 @@ export interface HostWorkspace {
   listFiles(): Promise<string[]>;
 
   commit(options: CommitOptions): Promise<CommitResult>;
+  revert(paths?: string[]): Promise<string[]>;
   reset(): Promise<void>;
 
   destroy(args: DestroyWorkspaceArgs): Promise<void>;
@@ -260,6 +261,10 @@ class ProvisionedHostWorkspace implements HostWorkspace {
 
   commit(options: CommitOptions): Promise<CommitResult> {
     return this.ws.commit(options);
+  }
+
+  revert(paths?: string[]): Promise<string[]> {
+    return this.ws.revert(paths);
   }
 
   reset(): Promise<void> {

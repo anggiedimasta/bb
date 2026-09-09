@@ -211,6 +211,36 @@ export const KNOWN_ACP_AGENTS: readonly AcpAgentDefinition[] = [
     },
     nativeRootsResolver: resolveHermesNativeRoots,
   },
+  {
+    id: "acp-kiro",
+    displayName: "Kiro Agent",
+    icon: declaredIcon("kiro"),
+    iconTint: { light: "#993FF5", dark: "#993FF5" },
+    signInCommand: "kiro-cli whoami",
+    installUrl: "https://kiro.dev",
+    visibility: "installed",
+    dialect: "kiro",
+    providerUsage: true,
+    fork: "none",
+    primaryModels: [
+      "auto",
+      "claude-sonnet-4.6",
+      "claude-opus-5",
+      "claude-opus-4.8",
+      "claude-sonnet-4.5",
+      "gpt-5.6-sol",
+      "gpt-5.6-terra",
+      "deepseek-3.2",
+      "minimax-m2.5",
+      "qwen3-coder-next",
+    ],
+    launch: {
+      displayName: "Kiro Agent",
+      command: "kiro-cli",
+      args: ["acp", "--trust-all-tools"],
+      env: {},
+    },
+  },
 ];
 
 export const RESERVED_ACP_PROVIDER_IDS: ReadonlySet<string> = new Set(

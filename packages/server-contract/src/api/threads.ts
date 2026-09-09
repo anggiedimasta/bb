@@ -170,6 +170,8 @@ export const forkThreadRequestSchema = z
     environment: createThreadEnvironmentArgsSchema.optional(),
     origin: threadCreateOriginSchema.default("sdk"),
     originPluginId: z.string().min(1).optional(),
+    providerId: z.string().min(1).optional(),
+    model: z.string().min(1).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -256,6 +258,24 @@ export const editMessageResponseSchema = z
   })
   .strict();
 export type EditMessageResponse = z.infer<typeof editMessageResponseSchema>;
+
+export const undoThreadTurnRequestSchema = z
+  .object({
+    targetSequence: z.number().int().nonnegative().optional(),
+    revertWorkspaceChanges: z.boolean().optional(),
+  })
+  .strict();
+export type UndoThreadTurnRequest = z.infer<typeof undoThreadTurnRequestSchema>;
+
+export const undoThreadTurnResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    undonePrompt: promptInputSchema.array(),
+    revertedFiles: z.array(z.string()),
+    undoneTurnId: z.string().nullable(),
+  })
+  .strict();
+export type UndoThreadTurnResponse = z.infer<typeof undoThreadTurnResponseSchema>;
 
 /**
  * The reason a retry carries when the caller names none. Filled here at the

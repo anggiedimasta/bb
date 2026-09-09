@@ -39,6 +39,30 @@ describe("serializedTextForPromptMentionResource", () => {
       }),
     ).toBe("@thread:thr_abc");
   });
+
+  it("serializes a file path mention with a line range", () => {
+    expect(
+      serializedTextForPromptMentionResource({
+        kind: "path",
+        source: "workspace",
+        entryKind: "file",
+        path: "src/index.ts",
+        label: "index.ts:10-25",
+        lineRange: { startLineNumber: 10, endLineNumber: 25 },
+      }),
+    ).toBe("@src/index.ts:10-25");
+
+    expect(
+      serializedTextForPromptMentionResource({
+        kind: "path",
+        source: "workspace",
+        entryKind: "file",
+        path: "src/index.ts",
+        label: "index.ts:42",
+        lineRange: { startLineNumber: 42, endLineNumber: 42 },
+      }),
+    ).toBe("@src/index.ts:42");
+  });
 });
 
 describe("promptMentionClipboardContent", () => {

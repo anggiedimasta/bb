@@ -29,8 +29,10 @@ interface ThreadForkCommandOptions {
   image?: string[];
   json?: boolean;
   newEnvironment?: string;
+  model?: string;
   permissionMode?: string;
   prompt?: string;
+  provider?: string;
   sourceSeqEnd?: string;
   title?: string;
   visibility?: string;
@@ -113,6 +115,8 @@ export function registerForkCommand(
       "--base-branch <branch>",
       "Exact Git ref; omit for bb's project default (use origin/<branch> for a remote ref)",
     )
+    .option("--provider <provider>", "Target agent provider for fork/handoff")
+    .option("--model <model>", "Target model for fork/handoff")
     .option("--permission-mode <mode>", PERMISSION_MODE_HELP)
     .option("--visibility <visibility>", "Thread visibility: visible or hidden")
     .option(
@@ -182,6 +186,8 @@ export function registerForkCommand(
               ...(environment === undefined ? {} : { environment }),
               ...(input === undefined ? {} : { input }),
               ...(sourceSeqEnd === undefined ? {} : { sourceSeqEnd }),
+              ...(opts.provider === undefined ? {} : { providerId: opts.provider }),
+              ...(opts.model === undefined ? {} : { model: opts.model }),
               ...(opts.title === undefined ? {} : { title: opts.title }),
               ...(permissionMode === undefined ? {} : { permissionMode }),
               ...(visibility === undefined ? {} : { visibility }),

@@ -250,6 +250,9 @@ export function createFakeWorkspace(pathname: string) {
         commitSubject: options.message,
       };
     },
+    async revert(paths?: string[]) {
+      return paths ?? [];
+    },
     async reset() {},
     async destroy() {
       state.destroyed = true;

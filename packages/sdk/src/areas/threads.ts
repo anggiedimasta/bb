@@ -21,6 +21,8 @@ import type {
   QueuedMessageListQuery,
   EditMessageRequest,
   EditMessageResponse,
+  UndoThreadTurnRequest,
+  UndoThreadTurnResponse,
   ForkThreadRequest,
   DeleteThreadRequest,
   PromptHistoryResponse,
@@ -246,6 +248,12 @@ export interface ThreadDeleteArgs extends DeleteThreadRequest {
 export interface ThreadSendArgs extends SendMessageRequest {
   threadId: string;
 }
+
+export interface ThreadUndoArgs extends UndoThreadTurnRequest {
+  threadId: string;
+  signal?: AbortSignal;
+}
+export type ThreadUndoResult = UndoThreadTurnResponse;
 
 export interface ThreadEditMessageArgs extends EditMessageRequest {
   threadId: string;
@@ -539,6 +547,7 @@ export interface ThreadsArea {
     args: ThreadStatusArgs,
   ): Promise<ThreadDefaultExecutionOptionsResult>;
   delete(args: ThreadDeleteArgs): Promise<ThreadDeleteResult>;
+  undo(args: ThreadUndoArgs): Promise<ThreadUndoResult>;
   editMessage(args: ThreadEditMessageArgs): Promise<ThreadEditMessageResult>;
   events: ThreadEventsArea;
   fork(args: ThreadForkArgs): Promise<ThreadForkResult>;
@@ -1096,6 +1105,18 @@ export function createThreadsArea(args: CreateSdkAreaArgs): ThreadsArea {
         }),
       );
       return { ok: true };
+    },
+    async undo(input) {
+      const { threadId, signal, ...json } = input;
+      return transport.readJson(
+        transport.api.v1.threads[":id"].undo.$post(
+          {
+            param: { id: threadId },
+            json,
+          },
+          { init: { signal } },
+        ),
+      );
     },
     async editMessage(input) {
       const { threadId, ...json } = input;

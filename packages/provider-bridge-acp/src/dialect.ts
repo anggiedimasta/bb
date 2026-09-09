@@ -3,6 +3,7 @@ import { basename } from "node:path";
 import { z } from "zod";
 import {
   CURSOR_ACP_MAINTENANCE,
+  KIRO_ACP_MAINTENANCE,
   type AcpMaintenanceDialect,
 } from "./bridge/provider-maintenance.js";
 import { delegationPresentation } from "./presentation.js";
@@ -195,6 +196,11 @@ export const CURSOR_ACP_DIALECT: AcpDialect = {
   maintenance: CURSOR_ACP_MAINTENANCE,
 };
 
+export const KIRO_ACP_DIALECT: AcpDialect = {
+  id: "kiro",
+  maintenance: KIRO_ACP_MAINTENANCE,
+};
+
 const ompBashRawInputSchema = z
   .object({
     command: z.string(),
@@ -378,6 +384,7 @@ export const OPENCODE_ACP_DIALECT: AcpDialect = {
 
 const DIALECTS_BY_ID: ReadonlyMap<string, AcpDialect> = new Map([
   [CURSOR_ACP_DIALECT.id, CURSOR_ACP_DIALECT],
+  [KIRO_ACP_DIALECT.id, KIRO_ACP_DIALECT],
   [GROK_ACP_DIALECT.id, GROK_ACP_DIALECT],
   [OMP_ACP_DIALECT.id, OMP_ACP_DIALECT],
   [OPENCODE_ACP_DIALECT.id, OPENCODE_ACP_DIALECT],
@@ -385,6 +392,7 @@ const DIALECTS_BY_ID: ReadonlyMap<string, AcpDialect> = new Map([
 
 const DIALECT_IDS_BY_COMMAND: Readonly<Record<string, string>> = {
   "cursor-agent": CURSOR_ACP_DIALECT.id,
+  "kiro-cli": KIRO_ACP_DIALECT.id,
   grok: GROK_ACP_DIALECT.id,
   omp: OMP_ACP_DIALECT.id,
   opencode: OPENCODE_ACP_DIALECT.id,

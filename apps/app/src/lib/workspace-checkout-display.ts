@@ -1,4 +1,4 @@
-import type { GitCheckoutRef } from "@bb/domain";
+import type { GitCheckoutRef, WorkspaceBranch } from "@bb/domain";
 
 const SHORT_SHA_LENGTH = 7;
 
@@ -10,10 +10,15 @@ export interface WorkspaceCheckoutDisplay {
   label: string;
   rowLabel: "Branch" | "Checkout";
   title: string;
+  aheadCount?: number;
+  behindCount?: number;
+  upstream?: string | null;
+  syncLabel?: string | null;
 }
 
 interface FormatWorkspaceCheckoutDisplayArgs {
   checkout: GitCheckoutRef;
+  branch?: WorkspaceBranch | null;
 }
 
 function shortSha(sha: string): string {
@@ -22,9 +27,17 @@ function shortSha(sha: string): string {
 
 export function formatWorkspaceCheckoutDisplay({
   checkout,
+  branch,
 }: FormatWorkspaceCheckoutDisplayArgs): WorkspaceCheckoutDisplay {
   switch (checkout.kind) {
-    case "branch":
+    case "branch": {
+      const ahead = branch?.aheadCount ?? 0;
+      const behind = branch?.behindCount ?? 0;
+      const upstream = branch?.upstream ?? null;
+      const syncLabel = upstream || ahead > 0 || behind > 0
+        ? `${behind}↓ ${ahead}↑`
+        : null;
+
       return {
         copyErrorMessage: "Failed to copy branch name",
         copyLabel: "Copy branch name",
@@ -32,8 +45,13 @@ export function formatWorkspaceCheckoutDisplay({
         copyValue: checkout.branchName,
         label: checkout.branchName,
         rowLabel: "Branch",
-        title: `Copy branch name: ${checkout.branchName}`,
+        title: `Copy branch name: ${checkout.branchName}${upstream ? ` (${upstream}: ${behind} behind, ${ahead} ahead)` : ""}`,
+        aheadCount: ahead,
+        behindCount: behind,
+        upstream,
+        syncLabel,
       };
+    }
     case "detached":
       if (checkout.headSha === null) {
         return {

@@ -95,7 +95,12 @@ export function serializedTextForPromptMentionResource(
     resource.entryKind === "directory" && !sourceQualifiedPath.endsWith("/")
       ? "/"
       : "";
-  return `@${sourceQualifiedPath}${directorySuffix}`;
+  const lineSuffix = resource.lineRange
+    ? resource.lineRange.startLineNumber === resource.lineRange.endLineNumber
+      ? `:${resource.lineRange.startLineNumber}`
+      : `:${resource.lineRange.startLineNumber}-${resource.lineRange.endLineNumber}`
+    : "";
+  return `@${sourceQualifiedPath}${directorySuffix}${lineSuffix}`;
 }
 
 function isSerializedPluginMentionText(

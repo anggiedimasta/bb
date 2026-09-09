@@ -29,6 +29,13 @@ const CURSOR_KEYCHAIN_ACCOUNT = "cursor-user";
 const CURSOR_ACCESS_TOKEN_SERVICE = "cursor-access-token";
 const CURSOR_INSTALL_SCRIPT_URL = "https://cursor.com/install";
 
+const KIRO_LOGIN_COMMAND = "kiro-cli login";
+const KIRO_INSTALL_URL = "https://kiro.dev";
+const KIRO_DEFAULT_REGION = "us-east-1";
+const KIRO_USAGE_TARGET = "AmazonCodeWhispererService.GetUsageLimits";
+const KIRO_TOKEN_KEY = "kirocli:odic:token";
+const KIRO_PROFILE_STATE_KEY = "api.codewhisperer.profile";
+
 function cursorAuthFilePath(): string {
   if (process.platform === "win32") {
     const appData =
@@ -441,7 +448,270 @@ async function readCursorUsage(): Promise<ProviderUsageResult> {
   }
 }
 
+function kiroDatabasePath(): string {
+  if (process.platform === "win32") {
+    const appData =
+      process.env.APPDATA ?? path.join(os.homedir(), "AppData", "Roaming");
+    return path.join(appData, "kiro-cli", "data.sqlite3");
+  }
+  if (process.platform === "darwin") {
+    return path.join(
+      os.homedir(),
+      "Library",
+      "Application Support",
+      "kiro-cli",
+      "data.sqlite3",
+    );
+  }
+  const dataHome =
+    process.env.XDG_DATA_HOME ?? path.join(os.homedir(), ".local", "share");
+  return path.join(dataHome, "kiro-cli", "data.sqlite3");
+}
+
+const kiroTokenSchema = z
+  .object({ access_token: z.string().min(1) })
+  .passthrough();
+const kiroProfileStateSchema = z
+  .object({
+    arn: z.string().min(1),
+    profile_name: z.string().min(1).nullish(),
+  })
+  .passthrough();
+
+interface KiroCredentials {
+  accessToken: string;
+  profileArn: string | null;
+  region: string;
+}
+
+function decodeKiroStateValue(value: unknown): unknown {
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }
+  if (value instanceof Uint8Array) {
+    try {
+      return JSON.parse(Buffer.from(value).toString("utf8"));
+    } catch {
+      return null;
+    }
+  }
+  return value;
+}
+
+const VALID_KIRO_REGIONS = new Set([
+  "us-east-1",
+  "eu-central-1",
+  "us-gov-east-1",
+  "us-gov-west-1",
+]);
+
+function extractRegionFromArn(arn: string | null): string | null {
+  if (arn === null) return null;
+  const match = /^arn:aws:[^:]+:([^:]+):/u.exec(arn);
+  return match?.[1] ?? null;
+}
+
+function readKiroCredentials(): KiroCredentials | null {
+  const databasePath = kiroDatabasePath();
+  if (!existsSync(databasePath)) return null;
+  let database: DatabaseSync | null = null;
+  try {
+    database = new DatabaseSync(databasePath);
+    database.exec("PRAGMA query_only = true");
+    const tokenRow = database
+      .prepare("SELECT value FROM auth_kv WHERE key = ?")
+      .get(KIRO_TOKEN_KEY);
+    const tokenValue =
+      tokenRow === undefined
+        ? null
+        : decodeKiroStateValue(Reflect.get(tokenRow, "value"));
+    const token = kiroTokenSchema.safeParse(tokenValue);
+    if (!token.success) return null;
+
+    const profileRow = database
+      .prepare("SELECT value FROM state WHERE key = ?")
+      .get(KIRO_PROFILE_STATE_KEY);
+    const profile = kiroProfileStateSchema.safeParse(
+      profileRow === undefined
+        ? null
+        : decodeKiroStateValue(Reflect.get(profileRow, "value")),
+    );
+
+    const profileArn = profile.success ? profile.data.arn : null;
+    const arnRegion = extractRegionFromArn(profileArn);
+    const region =
+      arnRegion !== null && VALID_KIRO_REGIONS.has(arnRegion)
+        ? arnRegion
+        : KIRO_DEFAULT_REGION;
+
+    return {
+      accessToken: token.data.access_token,
+      profileArn,
+      region,
+    };
+  } catch {
+    return null;
+  } finally {
+    database?.close();
+  }
+}
+
+const kiroUsageBreakdownSchema = z
+  .object({
+    resourceType: z.string().min(1).nullish(),
+    displayName: z.string().min(1).nullish(),
+    displayNamePlural: z.string().min(1).nullish(),
+    currentUsageWithPrecision: z.number().nonnegative().nullish(),
+    currentUsage: z.number().nonnegative().nullish(),
+    usageLimitWithPrecision: z.number().nonnegative().nullish(),
+    usageLimit: z.number().nonnegative().nullish(),
+    nextDateReset: z.number().nonnegative().nullish(),
+  })
+  .passthrough();
+
+const kiroUsageResponseSchema = z
+  .object({
+    nextDateReset: z.number().nonnegative().nullish(),
+    subscriptionInfo: z
+      .object({ subscriptionTitle: z.string().min(1).nullish() })
+      .passthrough()
+      .nullish(),
+    usageBreakdownList: z.array(kiroUsageBreakdownSchema).default([]),
+  })
+  .passthrough();
+
+function epochSecondsToIso(seconds: number | null | undefined): string | null {
+  if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) {
+    return null;
+  }
+  const date = new Date(seconds * 1_000);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function normalizeKiroUsage(raw: unknown): ProviderUsage {
+  const parsed = kiroUsageResponseSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      status: "error",
+      message: "Kiro usage response was malformed.",
+      planLabel: null,
+      accountEmail: null,
+    };
+  }
+  const planLabel = parsed.data.subscriptionInfo?.subscriptionTitle ?? null;
+  const windows: ProviderUsageWindow[] = [];
+  for (const breakdown of parsed.data.usageBreakdownList) {
+    const limit = breakdown.usageLimitWithPrecision ?? breakdown.usageLimit;
+    const used =
+      breakdown.currentUsageWithPrecision ?? breakdown.currentUsage ?? 0;
+    if (limit == null || limit <= 0) continue;
+    const label =
+      breakdown.displayNamePlural ??
+      breakdown.displayName ??
+      breakdown.resourceType ??
+      "Usage";
+    windows.push({
+      label,
+      usedPercent: clampPercent((used / limit) * 100),
+      resetsAt:
+        epochSecondsToIso(breakdown.nextDateReset) ??
+        epochSecondsToIso(parsed.data.nextDateReset),
+    });
+  }
+  return {
+    status: "ok",
+    accountEmail: null,
+    planLabel,
+    windows,
+  };
+}
+
+async function fetchKiroUsageLimits(
+  credentials: KiroCredentials,
+): Promise<Response> {
+  const body: Record<string, string> = { resourceType: "AGENTIC_REQUEST" };
+  if (credentials.profileArn !== null) {
+    body.profileArn = credentials.profileArn;
+  }
+  return fetch(`https://management.${credentials.region}.kiro.dev/`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${credentials.accessToken}`,
+      Accept: "application/json",
+      "Content-Type": "application/x-amz-json-1.0",
+      "X-Amz-Target": KIRO_USAGE_TARGET,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(USAGE_FETCH_TIMEOUT_MS),
+  });
+}
+
+async function readKiroUsage(): Promise<ProviderUsageResult> {
+  const credentials = readKiroCredentials();
+  if (credentials === null) {
+    return { supported: true, usage: { status: "unauthenticated" } };
+  }
+  try {
+    const response = await fetchKiroUsageLimits(credentials);
+    if (response.status === 401 || response.status === 403) {
+      return { supported: true, usage: { status: "expired" } };
+    }
+    if (!response.ok) {
+      return {
+        supported: true,
+        usage: {
+          status: "error",
+          message: `Kiro usage request failed (HTTP ${response.status}).`,
+          planLabel: null,
+          accountEmail: null,
+        },
+      };
+    }
+    return {
+      supported: true,
+      usage: normalizeKiroUsage(await response.json()),
+    };
+  } catch (error) {
+    const cause =
+      error instanceof Error && error.cause !== undefined
+        ? error.cause instanceof Error
+          ? error.cause.message
+          : String(error.cause)
+        : null;
+    const message =
+      cause !== null
+        ? `${error instanceof Error ? error.message : String(error)}: ${cause}`
+        : error instanceof Error
+          ? error.message
+          : String(error);
+    return {
+      supported: true,
+      usage: {
+        status: "error",
+        message,
+        planLabel: null,
+        accountEmail: null,
+      },
+    };
+  }
+}
+
+export const KIRO_ACP_MAINTENANCE: AcpMaintenanceDialect = {
+  loginCommand: KIRO_LOGIN_COMMAND,
+  installer: () => downloadedInstallerCommand(KIRO_INSTALL_URL),
+  readAccount: async () => {
+    const credentials = readKiroCredentials();
+    return credentials === null ? null : { email: null };
+  },
+  readUsage: readKiroUsage,
+};
+
 export const __testing = {
   buildProviderInstallationRun: buildAcpProviderInstallationRun,
   normalizeUsage,
+  normalizeKiroUsage,
 };

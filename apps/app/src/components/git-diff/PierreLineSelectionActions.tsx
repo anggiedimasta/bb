@@ -33,7 +33,8 @@ interface UsePierreLineSelectionActionsArgs {
   buildSelectionText: (range: SelectedLineRange) => string | null;
   containerRef: RefObject<HTMLElement | null>;
   enabled: boolean;
-  onSelectionAddToChat?: (text: string) => void;
+  onSelectionAddToChat?: (text: string, range?: SelectedLineRange) => void;
+  onSelectionAddToSideChat?: (text: string, range?: SelectedLineRange) => void;
 }
 
 export interface PierreLineSelectionActions {
@@ -267,6 +268,7 @@ export function usePierreLineSelectionActions({
   containerRef,
   enabled,
   onSelectionAddToChat,
+  onSelectionAddToSideChat,
 }: UsePierreLineSelectionActionsArgs): PierreLineSelectionActions {
   const [activeRange, setActiveRange] = useState<SelectedLineRange | null>(
     null,

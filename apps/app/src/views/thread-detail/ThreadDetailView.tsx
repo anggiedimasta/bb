@@ -16,6 +16,7 @@ import {
   isRunningThreadRuntimeDisplayStatus,
   type ThreadTimelineEditMessageHandler,
   type ThreadTimelineEditMessageTarget,
+  type ThreadTimelineUndoTurnTarget,
   type ThreadTimelineInlineMessageEditor,
   type ThreadTimelineForkMessageHandler,
   type ThreadTimelineSendToMainMessageHandler,
@@ -53,6 +54,7 @@ import {
 import {
   useCreateThreadQueuedMessage,
   useEditThreadMessage,
+  useUndoThreadTurn,
   useSendThreadMessage,
 } from "../../hooks/mutations/thread-runtime-mutations";
 import { useUpdateEnvironment } from "../../hooks/mutations/environment-mutations";
@@ -1034,6 +1036,38 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
     },
     [],
   );
+  const undoTurn = useUndoThreadTurn();
+  const handleUndoTurn = useCallback(
+    async (target: ThreadTimelineUndoTurnTarget) => {
+      if (!thread) {
+        return;
+      }
+      try {
+        const result = await undoTurn.mutateAsync({
+          threadId: thread.id,
+          targetSequence: target.targetSequence,
+          revertWorkspaceChanges: true,
+        });
+        if (result.undonePrompt && result.undonePrompt.length > 0) {
+          const restoredDraft = promptInputToDraft(result.undonePrompt);
+          selectionPromptDraft.setDraft(restoredDraft);
+          setComposerFocusRequestNonce((nonce) => nonce + 1);
+        }
+        if (result.revertedFiles.length > 0) {
+          appToast.success(
+            `Turn undone. Reverted ${result.revertedFiles.length} file(s).`,
+          );
+        } else {
+          appToast.success("Turn undone.");
+        }
+      } catch (err) {
+        appToast.error(
+          err instanceof Error ? err.message : "Failed to undo turn.",
+        );
+      }
+    },
+    [thread, undoTurn, selectionPromptDraft],
+  );
   const sentMessageEditThreadId = sentMessageEditSession?.threadId ?? null;
   const sentMessageEditTargetMessageId =
     sentMessageEditSession?.target.messageId ?? null;
@@ -1165,9 +1199,20 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
     [selectionPromptDraft.storageKey],
   );
   const handleSelectionAddToChat = useCallback(
-    (text: string, attachments?: readonly PromptDraftAttachment[]) => {
+    (
+      text: string,
+      attachmentsOrRange?: readonly PromptDraftAttachment[] | { start: number; end: number },
+    ) => {
       dismissCompactKeyboard();
-      addQuoteToComposer(text, attachments);
+      if (
+        attachmentsOrRange !== undefined &&
+        !Array.isArray(attachmentsOrRange) &&
+        "start" in attachmentsOrRange
+      ) {
+        addQuoteToComposer(text);
+      } else {
+        addQuoteToComposer(text, attachmentsOrRange as readonly PromptDraftAttachment[] | undefined);
+      }
       setComposerFocusRequestNonce((nonce) => nonce + 1);
     },
     [addQuoteToComposer, dismissCompactKeyboard],
@@ -1547,14 +1592,14 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
       if (resource.source === "thread-storage") {
         return () =>
           openStorageFile({
-            lineRange: null,
+            lineRange: resource.lineRange ?? null,
             path: resource.path,
           });
       }
       if (!thread?.environmentId) return null;
       return () =>
         openWorkspaceFile({
-          lineRange: null,
+          lineRange: resource.lineRange ?? null,
           path: resource.path,
           source: { kind: "working-tree" },
           statusLabel: null,
@@ -1848,6 +1893,33 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
       thread?.environmentId,
     ],
   );
+  const [isSyncingBranch, setIsSyncingBranch] = useState(false);
+  const handleSyncBranch = useCallback(async () => {
+    if (!environment?.id || isSyncingBranch) return;
+    setIsSyncingBranch(true);
+    const toastId = appToast.loading("Synchronizing branch with remote...");
+    try {
+      const response = await requestEnvironmentAction.mutateAsync({
+        id: environment.id,
+        action: "sync",
+      });
+      const summary = "summary" in response && typeof response.summary === "string" ? response.summary : undefined;
+      appToast.success(response.message || "Branch synchronized", {
+        id: toastId,
+        ...(summary ? { description: summary } : {}),
+      });
+    } catch (error) {
+      appToast.error("Failed to synchronize branch", {
+        id: toastId,
+        description: getMutationErrorMessage({
+          error,
+          fallbackMessage: "Failed to synchronize branch",
+        }),
+      });
+    } finally {
+      setIsSyncingBranch(false);
+    }
+  }, [environment?.id, isSyncingBranch, requestEnvironmentAction]);
   const workspaceBranch = workspaceStatus?.branch;
   const workspaceChangedFilesSection = useMemo(
     () => selectWorkspaceChangedFilesSection(workspaceStatus),
@@ -2390,7 +2462,10 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
   const promptBannerMergeBaseBranch = effectiveMergeBaseBranch;
   const threadBranchName = workspaceBranch?.currentBranch ?? undefined;
   const threadCheckoutDisplay = workspaceStatus
-    ? formatWorkspaceCheckoutDisplay({ checkout: workspaceStatus.checkout })
+    ? formatWorkspaceCheckoutDisplay({
+        checkout: workspaceStatus.checkout,
+        branch: workspaceStatus.branch,
+      })
     : undefined;
   const isWorkspaceDeleted = environment?.status === "destroyed";
   const threadEnvironmentGoneStatus =
@@ -2501,6 +2576,8 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
       canUseGitUi={canUseGitUi}
       contextWindowUsage={contextWindowUsage}
       environmentCheckout={threadCheckoutDisplay}
+      onSyncBranch={handleSyncBranch}
+      isSyncingBranch={isSyncingBranch}
       environmentCompactLabel={composerEnvironmentSummary?.compactLabel}
       environmentIcon={composerEnvironmentSummary?.icon}
       environmentLabel={composerEnvironmentSummary?.label}
@@ -2936,6 +3013,7 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
               onEditMessage: canEditSentMessages
                 ? handleEditSentMessage
                 : undefined,
+              onUndoTurn: handleUndoTurn,
               inlineMessageEditor,
               onMessageAddToChat: handleSelectionAddToChat,
               onSendToMainMessage: handleSendToMainMessage,

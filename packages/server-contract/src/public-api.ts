@@ -76,6 +76,8 @@ import type {
   CreateThreadRequest,
   EditMessageRequest,
   EditMessageResponse,
+  UndoThreadTurnRequest,
+  UndoThreadTurnResponse,
   ForkThreadRequest,
   RestartTerminalRequest,
   DeleteThreadSectionRequest,
@@ -300,6 +302,7 @@ import {
   retryTurnRequestSchema,
   sendMessageRequestSchema,
   editMessageRequestSchema,
+  undoThreadTurnRequestSchema,
   setQueuedMessageGroupBoundaryRequestSchema,
   sendQueuedMessageRequestSchema,
   systemExecutionOptionsQuerySchema,
@@ -1106,6 +1109,14 @@ export const publicApiRoutes = {
         sendMessageRequestSchema,
       ),
       response: jsonResponse<SendMessageResponse>(),
+    }),
+    undo: defineRoute({
+      path: "/threads/:id/undo",
+      method: "post",
+      request: jsonRequest<PathId, UndoThreadTurnRequest>(
+        undoThreadTurnRequestSchema,
+      ),
+      response: jsonResponse<UndoThreadTurnResponse>(),
     }),
     editMessage: defineRoute({
       path: "/threads/:id/edit-message",

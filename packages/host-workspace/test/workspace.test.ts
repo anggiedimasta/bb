@@ -1141,6 +1141,38 @@ describe("Workspace", () => {
     expect(files).toHaveLength(fileCount);
   }, 60_000);
 
+  it("reverts tracked file changes and deletes untracked files", async () => {
+    const repoPath = await initRepo();
+    const workspace = new Workspace(repoPath);
+
+    // Modify tracked file
+    await fs.writeFile(path.join(repoPath, "README.md"), "changed content\n", "utf8");
+    // Add untracked file
+    await fs.writeFile(path.join(repoPath, "new-file.txt"), "new file\n", "utf8");
+
+    const reverted = await workspace.revert(["README.md", "new-file.txt"]);
+    expect(reverted).toContain("README.md");
+    expect(reverted).toContain("new-file.txt");
+
+    const readme = await fs.readFile(path.join(repoPath, "README.md"), "utf8");
+    expect(readme).toBe("hello\n");
+    await expect(fs.stat(path.join(repoPath, "new-file.txt"))).rejects.toThrow();
+  });
+
+  it("reverts all changes when paths are omitted", async () => {
+    const repoPath = await initRepo();
+    const workspace = new Workspace(repoPath);
+
+    await fs.writeFile(path.join(repoPath, "README.md"), "changed content\n", "utf8");
+    await fs.writeFile(path.join(repoPath, "untracked.txt"), "untracked\n", "utf8");
+
+    await workspace.revert();
+
+    const readme = await fs.readFile(path.join(repoPath, "README.md"), "utf8");
+    expect(readme).toBe("hello\n");
+    await expect(fs.stat(path.join(repoPath, "untracked.txt"))).rejects.toThrow();
+  });
+
   it("returns null when HEAD is unavailable in an empty repository", async () => {
     const repoPath = await makeTempDir("bb-workspace-empty-repo-");
     await runGit(["init", "-b", "main"], { cwd: repoPath });

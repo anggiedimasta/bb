@@ -709,4 +709,52 @@ describe("EmbeddedThreadChat", () => {
     );
     expect(hostDraftMocks.textAtNotify).toEqual(["beta draft", "alpha draft"]);
   });
+
+  it("appends dropped workspace file mention when dropped onto the chat window", () => {
+    const threadId = "thr_drop_test";
+    const { container } = renderEmbeddedChat({ threadId });
+    const threadWindow = container.querySelector("[data-thread-window]");
+    expect(threadWindow).not.toBeNull();
+
+    const resource = {
+      kind: "path",
+      source: "workspace",
+      entryKind: "file",
+      path: "src/main.ts",
+      label: "main.ts",
+    };
+    const serializedText = "@src/main.ts";
+    const html =
+      '<span data-prompt-mention="true" data-prompt-mention-resource="' +
+      JSON.stringify(resource).replace(/"/g, "&quot;") +
+      '" data-prompt-mention-serialized-text="' +
+      serializedText +
+      '">' +
+      serializedText +
+      '</span> ';
+
+    const dataTransfer = {
+      types: ["text/html", "text/plain", "application/x-bb-mention"],
+      getData: (format: string) => {
+        if (format === "text/html") return html;
+        if (format === "text/plain") return `${serializedText} `;
+        return "";
+      },
+      dropEffect: "none",
+      effectAllowed: "all",
+      files: [],
+    };
+
+    fireEvent.drop(threadWindow!, { dataTransfer });
+
+    const draft = getPromptDraftAccessor({
+      kind: "thread",
+      projectId: "proj-1",
+      threadId,
+    }).getCurrent();
+
+    expect(draft.text).toBe("@src/main.ts ");
+    expect(draft.mentions).toHaveLength(1);
+    expect(draft.mentions[0].resource).toEqual(resource);
+  });
 });

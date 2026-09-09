@@ -149,6 +149,8 @@ interface ThreadDetailPromptAreaProps {
   canUseGitUi: boolean;
   contextWindowUsage?: ThreadTimelineResponse["contextWindowUsage"];
   environmentCheckout?: WorkspaceCheckoutDisplay;
+  onSyncBranch?: () => void;
+  isSyncingBranch?: boolean;
   environmentCompactLabel?: string;
   environmentGoneStatus: Extract<
     EnvironmentStatus,
@@ -345,6 +347,8 @@ export function ThreadDetailPromptArea({
   canUseGitUi,
   contextWindowUsage,
   environmentCheckout,
+  onSyncBranch,
+  isSyncingBranch,
   environmentCompactLabel,
   environmentGoneStatus,
   environmentHostId,
@@ -1000,16 +1004,19 @@ export function ThreadDetailPromptArea({
     title: thread.title,
     titleFallback: thread.titleFallback,
   });
-  const handleHandoffToNewThread = useCallback(() => {
-    navigate(getProjectComposeRoutePath(thread.projectId), {
-      state: buildThreadHandoffLocationState({
-        environmentId: thread.environmentId,
-        projectId: thread.projectId,
-        sourceThreadId: thread.id,
-        sourceThreadTitle: sourceThreadDisplayTitle,
-      }),
-    });
-  }, [
+  const handleHandoffToNewThread = useCallback(
+    (targetProviderId?: string) => {
+      navigate(getProjectComposeRoutePath(thread.projectId), {
+        state: buildThreadHandoffLocationState({
+          environmentId: thread.environmentId,
+          projectId: thread.projectId,
+          sourceThreadId: thread.id,
+          sourceThreadTitle: sourceThreadDisplayTitle,
+          ...(targetProviderId ? { targetProviderId } : {}),
+        }),
+      });
+    },
+    [
     navigate,
     sourceThreadDisplayTitle,
     thread.environmentId,
@@ -1131,6 +1138,11 @@ export function ThreadDetailPromptArea({
         options: providerOptions,
         selectedId: selectedProviderId,
         hasMultiple: hasMultipleProviders,
+        onChange: (targetProviderId: string) => {
+          if (targetProviderId !== selectedProviderId) {
+            handleHandoffToNewThread(targetProviderId);
+          }
+        },
       },
       model: {
         active: effectiveSelectedModel
@@ -1248,10 +1260,14 @@ export function ThreadDetailPromptArea({
           environmentTypeLabel={environmentTypeLabel}
           environmentCheckout={environmentCheckout}
           onCreateNewThreadInWorktree={onCreateNewThreadInWorktree}
+          onSyncBranch={onSyncBranch}
+          isSyncingBranch={isSyncingBranch}
         />
       ) : null,
     [
       environmentCheckout,
+      onSyncBranch,
+      isSyncingBranch,
       environmentCompactLabel,
       environmentIcon,
       environmentLabel,

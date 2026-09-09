@@ -176,6 +176,11 @@ export const environmentActionRequestSchema = z.discriminatedUnion("action", [
       action: z.literal("pull_request_draft"),
     })
     .strict(),
+  z
+    .object({
+      action: z.literal("sync"),
+    })
+    .strict(),
 ]);
 export type EnvironmentActionRequest = z.infer<
   typeof environmentActionRequestSchema
@@ -218,11 +223,20 @@ export type PullRequestDraftActionResponse = z.infer<
   typeof pullRequestDraftActionResponseSchema
 >;
 
+export const syncActionResponseSchema = z.object({
+  ok: z.literal(true),
+  action: z.literal("sync"),
+  message: z.string().min(1),
+  summary: z.string().optional(),
+});
+export type SyncActionResponse = z.infer<typeof syncActionResponseSchema>;
+
 export const environmentActionResponseSchema = z.discriminatedUnion("action", [
   commitActionResponseSchema,
   pullRequestReadyActionResponseSchema,
   pullRequestMergeActionResponseSchema,
   pullRequestDraftActionResponseSchema,
+  syncActionResponseSchema,
 ]);
 export type EnvironmentActionResponse = z.infer<
   typeof environmentActionResponseSchema

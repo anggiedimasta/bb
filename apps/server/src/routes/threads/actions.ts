@@ -51,6 +51,7 @@ import {
 } from "../../services/threads/thread-send.js";
 import { acceptThreadSendRequest } from "../../services/threads/thread-send-request.js";
 import { editThreadMessage } from "../../services/threads/thread-edit-message.js";
+import { undoThreadTurn } from "../../services/threads/thread-undo.js";
 import { clearThreadContext } from "../../services/threads/thread-context-clear.js";
 import {
   buildExecutionOptions,
@@ -232,6 +233,19 @@ export function registerThreadActionRoutes(app: Hono, deps: AppDeps): void {
     return context.json(
       await acceptThreadSendRequest(deps, { payload, thread }),
     );
+  });
+
+  post(routes.undo, async (context, payload) => {
+    const thread = requirePublicThread(deps.db, context.req.param("id"));
+    const environment = await requireThreadCommandEnvironment(deps, {
+      thread,
+    });
+    const result = await undoThreadTurn(deps, {
+      environment,
+      payload,
+      thread,
+    });
+    return context.json(result);
   });
 
   post(routes.editMessage, async (context, payload) => {

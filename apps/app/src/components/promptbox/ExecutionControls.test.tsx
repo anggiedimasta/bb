@@ -1,12 +1,29 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ProviderUsageResponse } from "@bb/host-daemon-contract";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { sdk } from "@/lib/sdk";
 import { createQueryClientTestHarness } from "@/test/queryClientTestHarness";
 import {
   ExecutionControls,
   type ExecutionControlsProps,
 } from "./ExecutionControls";
+
+vi.mock("@/lib/sdk", () => ({
+  BbHttpError: class BbHttpError extends Error {},
+  sdk: {
+    system: {
+      usageLimits: vi.fn(),
+    },
+  },
+}));
+
+const usageLimitsMock = vi.mocked(sdk.system.usageLimits);
+
+function setUsage(response: ProviderUsageResponse) {
+  usageLimitsMock.mockResolvedValue(response);
+}
 
 function makeExecutionControlsProps(
   providerOnChange?: (value: string) => void,
@@ -47,6 +64,10 @@ function renderExecutionControls(props: ExecutionControlsProps) {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+beforeEach(() => {
+  setUsage({});
 });
 
 describe("ExecutionControls", () => {
@@ -150,5 +171,55 @@ describe("ExecutionControls", () => {
     fireEvent.click(screen.getByRole("switch", { name: "Fast mode" }));
 
     expect(onServiceTierChange).toHaveBeenCalledWith("default");
+  });
+
+  it("renders the provider quota indicator next to the model picker", async () => {
+    setUsage({
+      codex: {
+        status: "ok",
+        accountEmail: null,
+        planLabel: "Pro",
+        windows: [{ label: "Weekly limit", usedPercent: 30, resetsAt: null }],
+      },
+    });
+
+    renderExecutionControls({
+      ...makeExecutionControlsProps(),
+      providerRouting: { hostId: "host-1" },
+    });
+
+    const indicator = await screen.findByLabelText(
+      "Codex: 70% of Weekly limit remaining",
+    );
+    expect(indicator.textContent).toContain("70%");
+    expect(usageLimitsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ hostId: "host-1", providerId: "codex" }),
+    );
+  });
+
+  it("omits the quota indicator when disabled", async () => {
+    setUsage({
+      codex: {
+        status: "ok",
+        accountEmail: null,
+        planLabel: null,
+        windows: [{ label: "Weekly limit", usedPercent: 30, resetsAt: null }],
+      },
+    });
+
+    const { container } = renderExecutionControls({
+      ...makeExecutionControlsProps(),
+      quota: { enabled: false },
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Provider, model and reasoning" }),
+      ).not.toBeNull();
+    });
+    expect(
+      container.querySelector("[data-provider-quota-indicator]"),
+    ).toBeNull();
+    expect(usageLimitsMock).not.toHaveBeenCalled();
   });
 });

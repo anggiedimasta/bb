@@ -65,10 +65,12 @@ export function customAcpAgentDefinition(
 ): AcpAgentDefinition {
   const nativeSkillRoots =
     agent.nativeSkillRoots ?? shipped?.launch.nativeSkillRoots;
+  const dialect = agent.dialect ?? shipped?.dialect;
   return {
     id: formatCustomAcpProviderId(agent.id),
     displayName: agent.displayName,
-    icon: CUSTOM_AGENT_GLYPH,
+    icon: shipped?.icon ?? CUSTOM_AGENT_GLYPH,
+    ...(shipped?.iconTint === undefined ? {} : { iconTint: shipped.iconTint }),
     launch: {
       displayName: agent.displayName,
       command: agent.command,
@@ -87,7 +89,28 @@ export function customAcpAgentDefinition(
         ? {}
         : { permissionCli: agent.permissionCli }),
     },
-    ...(agent.dialect === undefined ? {} : { dialect: agent.dialect }),
+    ...(dialect === undefined ? {} : { dialect }),
+    ...(shipped?.primaryModels === undefined
+      ? {}
+      : { primaryModels: shipped.primaryModels }),
+    ...(shipped?.reasoningProbePriorityModelIds === undefined
+      ? {}
+      : {
+          reasoningProbePriorityModelIds:
+            shipped.reasoningProbePriorityModelIds,
+        }),
+    ...(shipped?.parameterizedModelPicker === undefined
+      ? {}
+      : { parameterizedModelPicker: shipped.parameterizedModelPicker }),
+    ...(shipped?.providerUsage === undefined
+      ? {}
+      : { providerUsage: shipped.providerUsage }),
+    ...(shipped?.providerInstallation === undefined
+      ? {}
+      : { providerInstallation: shipped.providerInstallation }),
+    ...(shipped?.reasoningLevels === undefined
+      ? {}
+      : { reasoningLevels: shipped.reasoningLevels }),
     ...(shipped?.nativeRootsResolver === undefined
       ? {}
       : { nativeRootsResolver: shipped.nativeRootsResolver }),

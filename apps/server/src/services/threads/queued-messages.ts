@@ -48,6 +48,7 @@ import {
   prepareTurnSubmitCommandPayload,
 } from "./thread-commands.js";
 import { resolvePluginMentionContextInputs } from "../plugins/plugin-mentions.js";
+import { resolveThreadMentionContextInputs } from "./thread-mentions.js";
 import {
   prependDeferredFirstTurnContext,
   requireDeferredFirstTurnContextCurrent,
@@ -480,6 +481,15 @@ async function sendClaimedQueuedMessageForIdleProviderThread(
     inputGroups = [
       ...inputGroups.slice(0, -1),
       [...lastGroup, ...pluginMentionContext],
+    ];
+  }
+  const threadMentionContext = await resolveThreadMentionContextInputs(deps, input);
+  if (threadMentionContext.length > 0) {
+    input = [...input, ...threadMentionContext];
+    const lastGroup = inputGroups[inputGroups.length - 1]!;
+    inputGroups = [
+      ...inputGroups.slice(0, -1),
+      [...lastGroup, ...threadMentionContext],
     ];
   }
   const deferredFirstTurnContext = resolveDeferredFirstTurnContext(

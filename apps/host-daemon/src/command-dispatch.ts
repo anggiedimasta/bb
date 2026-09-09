@@ -497,6 +497,18 @@ const commandHandlers: CommandHandlerMap = {
     });
     return { transcript };
   },
+  "workspace.revert": async (command, options) => {
+    const entry = await requireResolvedWorkspaceForCommand({
+      dataDir: options.dataDir,
+      environmentId: command.environmentId,
+      requireGit: true,
+      requireManagedWorktree: true,
+      runtimeManager: options.runtimeManager,
+      workspaceContext: command.workspaceContext,
+    });
+    const revertedPaths = await entry.workspace.revert(command.paths);
+    return { revertedPaths };
+  },
   "workspace.commit": async (command, options) => {
     const entry = await requireResolvedWorkspaceForCommand({
       dataDir: options.dataDir,

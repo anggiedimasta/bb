@@ -12,6 +12,7 @@ import {
 import { type PickerOption } from "@/components/pickers/OptionPicker";
 import type { ModelPickerOption } from "@/components/pickers/model-picker-option";
 import type { ProviderPickerOption } from "@/components/pickers/model-brand-prefix";
+import { ProviderQuotaIndicator } from "@/components/promptbox/ProviderQuotaIndicator";
 
 interface ExecutionProviderConfig {
   options?: readonly ProviderPickerOption[];
@@ -52,12 +53,18 @@ export interface ExecutionPermissionConfig {
   supported: boolean;
 }
 
+interface ExecutionQuotaConfig {
+  enabled?: boolean;
+  hostId?: string;
+}
+
 export interface ExecutionControlsProps {
   providerRouting?: SystemProvidersQuery;
   provider: ExecutionProviderConfig;
   model: ExecutionModelConfig;
   serviceTier?: ExecutionServiceTierConfig;
   reasoning: ExecutionReasoningConfig;
+  quota?: ExecutionQuotaConfig;
   footerAction?: ModelReasoningPickerFooterAction;
   disabled?: boolean;
 }
@@ -68,6 +75,7 @@ export const ExecutionControls = memo(function ExecutionControls({
   model,
   serviceTier,
   reasoning,
+  quota,
   footerAction,
   disabled,
 }: ExecutionControlsProps) {
@@ -87,6 +95,15 @@ export const ExecutionControls = memo(function ExecutionControls({
     canSwitchProviders ||
     selectedProviderId.length > 0 ||
     footerAction !== undefined;
+
+  const selectedProviderLabel =
+    provider.options?.find((option) => option.value === selectedProviderId)
+      ?.label ?? selectedProviderId;
+  const quotaHostId = quota?.hostId ?? providerRouting?.hostId;
+  const showQuota =
+    (quota?.enabled ?? true) &&
+    !disabled &&
+    selectedProviderId.length > 0;
 
   return (
     <>
@@ -118,6 +135,13 @@ export const ExecutionControls = memo(function ExecutionControls({
           muted
           disabled={disabled}
           footerAction={footerAction}
+        />
+      ) : null}
+      {showQuota ? (
+        <ProviderQuotaIndicator
+          providerId={selectedProviderId}
+          providerLabel={selectedProviderLabel}
+          {...(quotaHostId === undefined ? {} : { hostId: quotaHostId })}
         />
       ) : null}
     </>

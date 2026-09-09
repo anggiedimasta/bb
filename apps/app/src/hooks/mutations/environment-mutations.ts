@@ -47,6 +47,8 @@ export function useRequestEnvironmentAction() {
           });
         case "pull_request_draft":
           return sdk.environments.markPullRequestDraft({ environmentId: id });
+        case "sync":
+          return sdk.environments.sync({ environmentId: id });
       }
     },
     onSuccess: (_response, variables) => {

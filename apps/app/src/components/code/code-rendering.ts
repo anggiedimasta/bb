@@ -26,7 +26,7 @@ export interface BbSourceCodeProps extends SourceCodePresentation {
   cacheKey?: string;
   className?: string;
   scrollToHighlightedLines?: boolean;
-  onSelectionAddToChat?: (text: string) => void;
+  onSelectionAddToChat?: ((text: string) => void) | ((text: string, range?: { start: number; end: number }) => void);
 }
 
 export interface BbDiffProps extends DiffPresentation {

@@ -675,6 +675,7 @@ function RootComposeSurface({
     isSubmitting,
     seedEnvironmentSelectionValue,
     setEnvironmentSelectionValue,
+    setSelectedProviderId,
     setProviderModelReasoning,
     setPermissionMode,
     setServiceTier,
@@ -771,6 +772,9 @@ function RootComposeSurface({
       setStartedComposing(true);
       setRootComposeProjectId(nextHandoffSeed.projectId);
       setForkSeed(null);
+      if (nextHandoffSeed.targetProviderId) {
+        setSelectedProviderId(nextHandoffSeed.targetProviderId);
+      }
       if (nextHandoffSeed.environmentId !== null) {
         seedEnvironmentSelectionValue(
           encodeReuseValue(nextHandoffSeed.environmentId),
@@ -790,6 +794,7 @@ function RootComposeSurface({
     setForkSeed,
     setPermissionMode,
     setPromptDraft,
+    setSelectedProviderId,
     setProviderModelReasoning,
     setRootComposeProjectId,
     setRootComposeSectionId,

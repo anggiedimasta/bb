@@ -57,6 +57,73 @@ describe("ACP provider maintenance", () => {
     });
   });
 
+  it("normalizes Kiro credit usage from the GetUsageLimits response", () => {
+    expect(
+      __testing.normalizeKiroUsage({
+        nextDateReset: 1790812800,
+        subscriptionInfo: { subscriptionTitle: "KIRO PRO" },
+        usageBreakdownList: [
+          {
+            resourceType: "CREDIT",
+            displayName: "Credit",
+            displayNamePlural: "Credits",
+            currentUsage: 62,
+            currentUsageWithPrecision: 62.61,
+            usageLimit: 1000,
+            usageLimitWithPrecision: 1000,
+            nextDateReset: 1790812800,
+          },
+        ],
+      }),
+    ).toEqual({
+      status: "ok",
+      accountEmail: null,
+      planLabel: "KIRO PRO",
+      windows: [
+        {
+          label: "Credits",
+          usedPercent: 6,
+          resetsAt: "2026-10-01T00:00:00.000Z",
+        },
+      ],
+    });
+  });
+
+  it("falls back to the top-level reset and skips zero-limit Kiro windows", () => {
+    expect(
+      __testing.normalizeKiroUsage({
+        nextDateReset: 1790812800,
+        subscriptionInfo: {},
+        usageBreakdownList: [
+          { resourceType: "CREDIT", currentUsage: 5, usageLimit: 0 },
+          { displayNamePlural: "Requests", currentUsage: 10, usageLimit: 40 },
+        ],
+      }),
+    ).toEqual({
+      status: "ok",
+      accountEmail: null,
+      planLabel: null,
+      windows: [
+        {
+          label: "Requests",
+          usedPercent: 25,
+          resetsAt: "2026-10-01T00:00:00.000Z",
+        },
+      ],
+    });
+  });
+
+  it("reports an error when the Kiro usage response is malformed", () => {
+    expect(
+      __testing.normalizeKiroUsage({ usageBreakdownList: "nope" }),
+    ).toEqual({
+      status: "error",
+      message: "Kiro usage response was malformed.",
+      planLabel: null,
+      accountEmail: null,
+    });
+  });
+
   it("offers the installer only through a fresh matching action", () => {
     expect(
       __testing.buildProviderInstallationRun(

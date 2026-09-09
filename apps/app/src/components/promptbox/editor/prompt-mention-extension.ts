@@ -11,7 +11,10 @@ import {
   promptMentionIconLabel,
   promptMentionTooltipLabel,
 } from "@/components/promptbox/mentions/prompt-mention-display";
-import { promptMentionClipboardDataAttributes } from "@/components/promptbox/mentions/prompt-mention-clipboard";
+import {
+  parsePromptMentionClipboardElement,
+  promptMentionClipboardDataAttributes,
+} from "@/components/promptbox/mentions/prompt-mention-clipboard";
 
 interface MentionRenderArgs {
   node: Pick<ProseMirrorNode, "attrs">;
@@ -45,6 +48,25 @@ export const PromptMentionExtension = Mention.extend({
         default: null,
       },
     };
+  },
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-prompt-mention="true"]',
+        getAttrs: (element) => {
+          if (!(element instanceof HTMLElement)) return false;
+          const payload = parsePromptMentionClipboardElement({ element });
+          if (!payload) return false;
+          return {
+            resource: payload.resource,
+            serializedText: payload.serializedText,
+          };
+        },
+      },
+      {
+        tag: `span[data-type="${this.name}"]`,
+      },
+    ];
   },
   addNodeView() {
     return ReactNodeViewRenderer(PromptMentionPillNodeView);

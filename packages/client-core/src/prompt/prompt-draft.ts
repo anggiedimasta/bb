@@ -118,6 +118,34 @@ export function appendQuoteAndAttachmentsToDraft(
   return { ...quotedState, attachments: mergedAttachments };
 }
 
+export function appendValueToPromptDraft(
+  state: PromptDraftState,
+  value: { text: string; mentions?: readonly PromptTextMention[] },
+): PromptDraftState {
+  const mentions = value.mentions ?? [];
+  if (value.text.length === 0 && mentions.length === 0) {
+    return state;
+  }
+  const needsLeadingSpace =
+    state.text.length > 0 && !/\s$/u.test(state.text);
+  const prefix = needsLeadingSpace ? " " : "";
+  const offset = state.text.length + prefix.length;
+  const newText = state.text + prefix + value.text;
+  const shiftedMentions: PromptTextMention[] = mentions.map((m) => ({
+    ...m,
+    start: m.start + offset,
+    end: m.end + offset,
+  }));
+  return {
+    ...state,
+    text: newText,
+    mentions: normalizePromptTextMentions(
+      [...state.mentions, ...shiftedMentions],
+      newText.length,
+    ),
+  };
+}
+
 export function isPromptDraftEmpty(draft: PromptDraftState): boolean {
   return (
     draft.text.length === 0 &&

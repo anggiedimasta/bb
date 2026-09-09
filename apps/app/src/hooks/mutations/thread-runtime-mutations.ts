@@ -550,3 +550,36 @@ export function useClearThreadGoal() {
     },
   });
 }
+
+export interface UndoThreadTurnMutationRequest {
+  threadId: string;
+  targetSequence?: number;
+  revertWorkspaceChanges?: boolean;
+}
+
+export function useUndoThreadTurn() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    meta: {
+      errorMessage: "Failed to undo turn.",
+      lifecycleOperation: "undo_thread_turn",
+    },
+    mutationFn: (args: UndoThreadTurnMutationRequest) =>
+      sdk.threads.undo(args),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({
+        queryKey: ["threads", variables.threadId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["thread-timeline", variables.threadId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["environments"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["work-status"],
+      });
+    },
+  });
+}

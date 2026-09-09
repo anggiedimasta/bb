@@ -58,6 +58,12 @@ const commandResultSideEffectHandlers: CommandResultSideEffectHandlers = {
   "thread.stop": settleThreadStopCommandResult,
   "thread.plan.cancel": settleThreadPlanCancelCommandResult,
   "turn.submit": settleTurnSubmitCommandResult,
+  "workspace.revert": ({ deps, command, report }) => {
+    notifyWorkspaceMutationResult(deps, {
+      environmentId: command.environmentId,
+      ok: report.ok,
+    });
+  },
   "workspace.commit": ({ deps, command, report }) => {
     notifyWorkspaceMutationResult(deps, {
       environmentId: command.environmentId,

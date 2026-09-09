@@ -750,7 +750,7 @@ function promptEditorValueFromRichHtml(html: string): ParsedRichClipboardValue {
   };
 }
 
-function promptEditorValueFromClipboardPaste(
+export function promptEditorValueFromClipboardPaste(
   clipboardData: DataTransfer | null,
   promptActions?: readonly PromptBoxAction[],
 ): PromptEditorValue | null {
@@ -1749,6 +1749,55 @@ export function PromptBoxInternal({
             .insertContent(promptEditorInlineContentFromValue(pastedValue))
             .setMeta("uiEvent", "paste")
             .run();
+          return true;
+        },
+        handleDrop: (view, event) => {
+          const attachFiles = onAttachFilesRef.current;
+          const clipboardItems = Array.from(event.dataTransfer?.items ?? []);
+          const droppedFiles = clipboardItems
+            .filter((item) => item.kind === "file")
+            .map((item) => item.getAsFile())
+            .filter((file): file is File => file !== null);
+
+          if (attachFiles && droppedFiles.length > 0) {
+            event.preventDefault();
+            void attachFiles(droppedFiles);
+            return true;
+          }
+
+          const droppedValue = promptEditorValueFromClipboardPaste(
+            event.dataTransfer ?? null,
+            promptActions,
+          );
+          if (droppedValue === null) {
+            return attachFiles !== undefined && droppedFiles.length > 0;
+          }
+
+          event.preventDefault();
+          if (droppedValue.text.length === 0) return true;
+
+          const dropPos = view.posAtCoords({
+            left: event.clientX,
+            top: event.clientY,
+          })?.pos;
+
+          const currentEditor = editorRef.current;
+          if (!currentEditor || currentEditor.isDestroyed) return true;
+
+          const chain = currentEditor.chain().focus();
+          if (dropPos !== undefined && dropPos !== null) {
+            chain.setTextSelection(dropPos);
+          }
+          chain
+            .insertContent(promptEditorInlineContentFromValue(droppedValue))
+            .setMeta("uiEvent", "drop")
+            .run();
+
+          const nextValue = trimTrailingPromptNewlines(
+            promptEditorValueFromDoc(currentEditor.state.doc),
+          );
+          lastSyncedEditorValueRef.current = nextValue;
+          onChangeRef.current(nextValue.text, nextValue.mentions);
           return true;
         },
       },
@@ -2974,15 +3023,40 @@ export function PromptBoxInternal({
       onSubmit={handleSubmit}
       onMouseDown={handlePromptBoxMouseDown}
       onDragOver={(event) => {
-        if (!onAttachFiles) return;
         event.preventDefault();
       }}
       onDrop={(event) => {
-        if (!onAttachFiles) return;
+        if (event.defaultPrevented) return;
         event.preventDefault();
-        if (!event.dataTransfer?.files || event.dataTransfer.files.length === 0)
+
+        const attachFiles = onAttachFilesRef.current;
+        const dropFiles = Array.from(event.dataTransfer?.files ?? []);
+        if (attachFiles && dropFiles.length > 0) {
+          emitAttachmentFiles(dropFiles);
           return;
-        emitAttachmentFiles(Array.from(event.dataTransfer.files));
+        }
+
+        const droppedValue = promptEditorValueFromClipboardPaste(
+          event.dataTransfer ?? null,
+          promptActions,
+        );
+        if (droppedValue === null || droppedValue.text.length === 0) return;
+
+        const currentEditor = editorRef.current;
+        if (!currentEditor || currentEditor.isDestroyed) return;
+
+        currentEditor
+          .chain()
+          .focus()
+          .insertContent(promptEditorInlineContentFromValue(droppedValue))
+          .setMeta("uiEvent", "drop")
+          .run();
+
+        const nextValue = trimTrailingPromptNewlines(
+          promptEditorValueFromDoc(currentEditor.state.doc),
+        );
+        lastSyncedEditorValueRef.current = nextValue;
+        onChangeRef.current(nextValue.text, nextValue.mentions);
       }}
       className={cn(
         "group/promptbox relative w-full rounded-xl border border-border bg-background shadow-lift",
@@ -2995,6 +3069,7 @@ export function PromptBoxInternal({
         type="file"
         multiple
         className="hidden"
+        data-promptbox-attachment-input=""
         onChange={handleAttachmentInputChange}
       />
       <div

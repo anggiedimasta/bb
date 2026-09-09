@@ -124,7 +124,9 @@ export function useEnvironmentWorkStatus(
       }),
     enabled,
     ...REALTIME_OWNED_MOUNT_BASELINE_QUERY_POLICY,
-    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchInterval: 3 * 60 * 1000,
+    staleTime: 10_000,
     placeholderData: (previousData, previousQuery) =>
       environmentId
         ? resolveEnvironmentWorkStatusPlaceholder(

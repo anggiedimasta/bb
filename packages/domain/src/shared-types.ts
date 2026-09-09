@@ -109,6 +109,14 @@ export type PromptMentionCommandOrigin = z.infer<
   typeof promptMentionCommandOriginSchema
 >;
 
+export const promptMentionLineRangeSchema = z.object({
+  startLineNumber: z.number().int().positive(),
+  endLineNumber: z.number().int().positive(),
+});
+export type PromptMentionLineRange = z.infer<
+  typeof promptMentionLineRangeSchema
+>;
+
 const canonicalPromptMentionResourceSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("thread"),
@@ -132,6 +140,7 @@ const canonicalPromptMentionResourceSchema = z.discriminatedUnion("kind", [
     entryKind: promptMentionPathEntryKindSchema,
     path: z.string(),
     label: z.string(),
+    lineRange: promptMentionLineRangeSchema.nullable().optional(),
   }),
   z.object({
     kind: z.literal("command"),

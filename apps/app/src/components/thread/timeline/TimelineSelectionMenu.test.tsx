@@ -187,4 +187,40 @@ describe("TimelineSelectionMenu", () => {
       screen.getByRole("textbox", { name: "Chat composer" }),
     );
   });
+  it("triggers onAddToChat when meta+L is pressed", () => {
+    const onAddToChat = vi.fn();
+    const onDismiss = vi.fn();
+    render(
+      <TimelineSelectionMenu
+        selection={makeSelection()}
+        onAddToChat={onAddToChat}
+        onDismiss={onDismiss}
+      />,
+    );
+
+    fireEvent.keyDown(window, { key: "l", metaKey: true });
+    expect(onAddToChat).toHaveBeenCalledWith("selected text");
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders Add to Side Chat button when onAddToSideChat is provided", () => {
+    const onAddToSideChat = vi.fn();
+    const onDismiss = vi.fn();
+    render(
+      <TimelineSelectionMenu
+        selection={makeSelection()}
+        onAddToChat={vi.fn()}
+        onAddToSideChat={onAddToSideChat}
+        onDismiss={onDismiss}
+      />,
+    );
+
+    const sideChatButton = screen.getByRole("button", {
+      name: "Add to Side Chat",
+    });
+    expect(sideChatButton).toBeTruthy();
+    fireEvent.click(sideChatButton);
+    expect(onAddToSideChat).toHaveBeenCalledWith("selected text");
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
 });

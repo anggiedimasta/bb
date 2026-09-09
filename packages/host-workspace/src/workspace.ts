@@ -25,6 +25,7 @@ import {
   parseNameStatusEntries,
   parseNameStatusSourceEntries,
   parseNumstatEntriesZ,
+  parsePorcelainBranchHeader,
   parsePorcelainEntries,
   pathExists,
   readDefaultBranch,
@@ -207,6 +208,8 @@ interface ListWorkspaceFilesRecursivelyArgs {
 }
 
 const WORKSPACE_STATUS_GIT_TIMEOUT_MS = 15_000;
+const workspaceLastAutoFetchAt = new Map<string, number>();
+const WORKSPACE_AUTO_FETCH_INTERVAL_MS = 3 * 60 * 1000;
 const WORKSPACE_STATUS_UNTRACKED_ENRICHMENT_TIMEOUT_MS = 10_000;
 const TEMPORARY_UNTRACKED_INDEX_ADD_ATTEMPTS = 3;
 const DIFF_NUMSTAT_BASE_BUFFER_BYTES = 64 * 1024;
@@ -697,6 +700,19 @@ export class Workspace {
           : null,
       ]);
 
+    const now = Date.now();
+    const lastFetch = workspaceLastAutoFetchAt.get(this.path) ?? 0;
+    if (now - lastFetch > WORKSPACE_AUTO_FETCH_INTERVAL_MS) {
+      workspaceLastAutoFetchAt.set(this.path, now);
+      void this.runGit(["fetch", "--quiet"], {
+        cwd: this.path,
+        timeoutMs: 15_000,
+      }).catch(() => {
+        // Silently ignore network or offline fetch failures
+      });
+    }
+
+    const branchInfo = parsePorcelainBranchHeader(statusOutput.stdout);
     const entries = parsePorcelainEntries(statusOutput.stdout);
     const untrackedPaths = entries
       .filter((entry) => entry.status === "??")
@@ -774,6 +790,9 @@ export class Workspace {
           (checkout.kind === "branch" || checkout.kind === "unborn"
             ? (checkout.branchName ?? "")
             : ""),
+        upstream: branchInfo.upstream,
+        aheadCount: branchInfo.aheadCount,
+        behindCount: branchInfo.behindCount,
       },
       checkout,
       mergeBase: mergeBaseData,
@@ -1005,6 +1024,54 @@ export class Workspace {
       ).stdout.trim();
 
       return { commitSha, commitSubject };
+    });
+  }
+
+  async revert(paths?: string[]): Promise<string[]> {
+    await ensureGitRepo(this.path, this.gitProcessOptions);
+    return await this.withMutation(async () => {
+      if (!paths || paths.length === 0) {
+        await this.runGit(["reset", "--hard", "HEAD"], { cwd: this.path });
+        await this.runGit(["clean", "-fd"], { cwd: this.path });
+        return [];
+      }
+      const reverted: string[] = [];
+      for (const targetPath of paths) {
+        let success = false;
+        try {
+          await this.runGit(["checkout", "HEAD", "--", targetPath], {
+            cwd: this.path,
+          });
+          success = true;
+        } catch {
+          // Checkout failed (likely an untracked/new file)
+        }
+        try {
+          await this.runGit(["clean", "-fd", "--", targetPath], {
+            cwd: this.path,
+          });
+          success = true;
+        } catch {
+          // Clean failed
+        }
+        const fullPath = path.resolve(this.path, targetPath);
+        try {
+          const checkTracked = await this.runGit(
+            ["ls-files", "--", targetPath],
+            { cwd: this.path },
+          );
+          if (!checkTracked.stdout.trim()) {
+            await fs.rm(fullPath, { recursive: true, force: true });
+            success = true;
+          }
+        } catch {
+          // Ignore
+        }
+        if (success) {
+          reverted.push(targetPath);
+        }
+      }
+      return reverted;
     });
   }
 

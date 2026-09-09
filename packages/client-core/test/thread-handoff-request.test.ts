@@ -34,6 +34,18 @@ describe("thread handoff request", () => {
     ).toEqual(SEED);
   });
 
+  it("preserves targetProviderId when provided in handoff seed", () => {
+    const seedWithProvider: ThreadHandoffCreateSeed = {
+      ...SEED,
+      targetProviderId: "acp-kiro",
+    };
+    expect(
+      readThreadHandoffCreateSeedFromLocationState({
+        [THREAD_HANDOFF_CREATE_SEED_LOCATION_STATE_KEY]: seedWithProvider,
+      }),
+    ).toEqual(seedWithProvider);
+  });
+
   it("builds a prompt draft with a rich mention to the source thread", () => {
     const draft = buildThreadHandoffPromptDraft(SEED);
 

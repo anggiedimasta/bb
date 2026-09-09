@@ -347,6 +347,37 @@ describe("ThreadTimelineRows actions", () => {
     );
   });
 
+  it("offers undo action and calls onUndoTurn with sourceSeqStart", () => {
+    const onUndoTurn = vi.fn();
+    renderWithRouter(
+      <ThreadTimelineRows
+        timelineRows={[
+          conversationRow({
+            role: "user",
+            text: "Undoable message.",
+            sourceSeqStart: 42,
+            turnRequest: {
+              isGrouped: false,
+              kind: "message",
+              status: "accepted",
+            },
+          }),
+        ]}
+        onUndoTurn={onUndoTurn}
+        threadRuntimeDisplayStatus="idle"
+        workspaceRootPath={undefined}
+      />,
+    );
+
+    const undoButton = screen.getByRole("button", {
+      name: "Undo turn & revert changes",
+    });
+    fireEvent.click(undoButton);
+    expect(onUndoTurn).toHaveBeenCalledWith({
+      targetSequence: 42,
+    });
+  });
+
   it("does not offer edit for a steer request", () => {
     const markup = toMarkup(
       <ThreadTimelineRows

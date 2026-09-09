@@ -88,6 +88,7 @@ interface ConversationMessageContentUserProps extends ConversationMessageContent
   mentions: readonly PromptTextMention[];
   onAddToChat?: ThreadTimelineAddToChatHandler;
   onEdit?: () => void;
+  onUndo?: () => void;
   resolveMentionLink?: PromptMentionLinkResolver;
   resolveSegmentLinkHref?: TimelineTitleLinkResolver;
   onOpenLink?: ThreadTimelineLinkHandler;
@@ -128,6 +129,7 @@ interface ConversationMessageContentAssistantProps
   onOpenLink?: ThreadTimelineLinkHandler;
   onAddToChat?: ThreadTimelineAddToChatHandler;
   onFork?: () => void;
+  onUndo?: () => void;
   onSendToMain?: () => void;
   forkDisabled?: boolean;
   onSelectProse?: (selection: MessageProseSelection | null) => void;
@@ -151,6 +153,7 @@ interface UserConversationMessageProps {
   mobileActionDisplay: "inline" | "overflow";
   onAddToChat?: ThreadTimelineAddToChatHandler;
   onEdit?: () => void;
+  onUndo?: () => void;
   onOpenLink?: ThreadTimelineLinkHandler;
   onOpenLocalFileLink?: ThreadTimelineLocalFileLinkHandler;
   projectId?: string;
@@ -173,6 +176,7 @@ interface AssistantConversationMessageProps extends AssistantMessageRowIdentity 
   pluginActions?: readonly ThreadTimelinePluginMessageAction[];
   onAddToChat?: ThreadTimelineAddToChatHandler;
   onFork?: () => void;
+  onUndo?: () => void;
   onSendToMain?: () => void;
   forkDisabled?: boolean;
   onSelectProse?: (selection: MessageProseSelection | null) => void;
@@ -333,6 +337,7 @@ function UserConversationMessage({
   mobileActionDisplay,
   onAddToChat,
   onEdit,
+  onUndo,
   onOpenLink,
   onOpenLocalFileLink,
   pluginActions = [],
@@ -460,6 +465,7 @@ function UserConversationMessage({
             copyImageUrl={attachmentItems.imageItems[0]?.src}
             onAddToChat={onAddToChat}
             onEdit={onEdit}
+            onUndo={onUndo}
             pluginActions={pluginActions}
           />
         </div>
@@ -474,6 +480,7 @@ function AssistantConversationMessage({
   id,
   onAddToChat,
   onFork,
+  onUndo,
   onSendToMain,
   forkDisabled,
   onSelectProse,
@@ -630,6 +637,7 @@ function AssistantConversationMessage({
           copyImageUrl={attachmentItems.imageItems[0]?.src}
           onAddToChat={onAddToChat}
           onFork={onFork}
+          onUndo={onUndo}
           onSendToMain={onSendToMain}
           disabled={forkDisabled}
           pluginActions={pluginActions}
@@ -676,6 +684,7 @@ export function ConversationMessageContent(
         mobileActionDisplay={props.mobileActionDisplay ?? "overflow"}
         onAddToChat={props.onAddToChat}
         onEdit={props.onEdit}
+        onUndo={props.onUndo}
         onOpenLink={props.onOpenLink}
         onOpenLocalFileLink={onOpenLocalFileLink}
         projectId={projectId}
@@ -702,6 +711,7 @@ export function ConversationMessageContent(
       pluginActions={props.pluginActions}
       onAddToChat={props.onAddToChat}
       onFork={props.onFork}
+      onUndo={props.onUndo}
       onSendToMain={props.onSendToMain}
       forkDisabled={props.forkDisabled}
       onSelectProse={props.onSelectProse}

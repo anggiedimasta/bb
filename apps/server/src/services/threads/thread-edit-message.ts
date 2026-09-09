@@ -120,7 +120,7 @@ function isMessageEditThreadQuiescent(thread: Pick<Thread, "status">): boolean {
   return thread.status === "idle" || thread.status === "error";
 }
 
-async function stopThreadBeforeMessageEdit(
+export async function stopThreadBeforeMessageEdit(
   deps: LoggedPendingInteractionWorkSessionDeps,
   args: {
     environment: Parameters<typeof requireReadyThreadEnvironment>[0];

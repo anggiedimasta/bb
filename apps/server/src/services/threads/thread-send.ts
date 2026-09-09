@@ -64,6 +64,7 @@ import {
 } from "../lib/lifecycle-api-errors.js";
 import { validatePromptAttachmentReferences } from "../projects/attachments.js";
 import { resolvePluginMentionContextInputs } from "../plugins/plugin-mentions.js";
+import { resolveThreadMentionContextInputs } from "./thread-mentions.js";
 import { clearThreadContext } from "./thread-context-clear.js";
 import { withThreadSendGuard } from "./thread-context-mutation-guard.js";
 import {
@@ -460,6 +461,17 @@ async function sendThreadMessageWithoutContextClear(
       inputGroups = [
         ...inputGroups.slice(0, -1),
         [...lastGroup, ...pluginMentionContext],
+      ];
+    }
+  }
+  const threadMentionContext = await resolveThreadMentionContextInputs(deps, input);
+  if (threadMentionContext.length > 0) {
+    input = [...input, ...threadMentionContext];
+    if (inputGroups !== undefined && inputGroups.length > 0) {
+      const lastGroup = inputGroups[inputGroups.length - 1]!;
+      inputGroups = [
+        ...inputGroups.slice(0, -1),
+        [...lastGroup, ...threadMentionContext],
       ];
     }
   }

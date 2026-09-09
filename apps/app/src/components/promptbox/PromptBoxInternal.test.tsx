@@ -433,6 +433,31 @@ function pasteClipboard({
   });
 }
 
+function dropClipboard({
+  files = [],
+  html = "",
+  plainText = "",
+}: {
+  files?: File[];
+  html?: string;
+  plainText?: string;
+}) {
+  fireEvent.drop(getPromptEditorElement(), {
+    dataTransfer: {
+      files,
+      items: files.map((file) => ({
+        kind: "file",
+        getAsFile: () => file,
+      })),
+      getData: (type: string) => {
+        if (type === "text/html") return html;
+        if (type === "text/plain") return plainText;
+        return "";
+      },
+    },
+  });
+}
+
 function mockPointerCoarse(matches: boolean): () => void {
   const originalMatchMedia = window.matchMedia;
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
@@ -3451,6 +3476,65 @@ describe("PromptBoxInternal prompt actions", () => {
       "Build a plugin capability like @Inline actions using bb's Plugin Guide. " +
         "Build a plugin capability like @Thread side-panel tabs using bb's Plugin Guide. ",
     );
+  });
+
+  it("inserts dropped workspace file and directory mentions as pills", async () => {
+    const { changes, promptBoxRef } = renderPromptBox("");
+    await focusPromptEnd(promptBoxRef);
+
+    const filePill = promptMentionClipboardContent({
+      kind: "path",
+      source: "workspace",
+      entryKind: "file",
+      path: "src/index.ts",
+      label: "index.ts",
+    });
+
+    dropClipboard({ html: filePill.html, plainText: filePill.text });
+
+    await waitFor(() =>
+      expect(latestChange(changes)?.mentions).toHaveLength(1),
+    );
+    expect(
+      latestChange(changes)?.mentions[0]?.resource,
+    ).toEqual({
+      kind: "path",
+      source: "workspace",
+      entryKind: "file",
+      path: "src/index.ts",
+      label: "index.ts",
+    });
+    expect(
+      getPromptEditorElement().querySelectorAll(".prompt-mention-pill"),
+    ).toHaveLength(1);
+    expect(latestValue(changes)).toBe("@src/index.ts ");
+
+    const dirPill = promptMentionClipboardContent({
+      kind: "path",
+      source: "workspace",
+      entryKind: "directory",
+      path: "components",
+      label: "components",
+    });
+
+    dropClipboard({ html: dirPill.html, plainText: dirPill.text });
+
+    await waitFor(() =>
+      expect(latestChange(changes)?.mentions).toHaveLength(2),
+    );
+    expect(
+      latestChange(changes)?.mentions[1]?.resource,
+    ).toEqual({
+      kind: "path",
+      source: "workspace",
+      entryKind: "directory",
+      path: "components",
+      label: "components",
+    });
+    expect(
+      getPromptEditorElement().querySelectorAll(".prompt-mention-pill"),
+    ).toHaveLength(2);
+    expect(latestValue(changes)).toBe("@src/index.ts @components/ ");
   });
 
   it("opens the file picker from the prompt actions menu", async () => {

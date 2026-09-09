@@ -114,6 +114,24 @@ describe("MessageActionBar", () => {
     expect(onSendToMain).toHaveBeenCalledTimes(1);
   });
 
+  it("renders the undo action and fires its handler when supplied", () => {
+    const onUndo = vi.fn();
+    render(
+      <MessageActionBar
+        messageText="A turn to undo."
+        alignment="start"
+        mobileActionDisplay="overflow"
+        onUndo={onUndo}
+      />,
+    );
+
+    const button = screen.getByRole("button", {
+      name: "Undo turn & revert changes",
+    });
+    fireEvent.click(button);
+    expect(onUndo).toHaveBeenCalledTimes(1);
+  });
+
   it("orders agent actions as copy, add, then fork", () => {
     const { container } = render(
       <MessageActionBar

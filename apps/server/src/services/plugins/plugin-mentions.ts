@@ -14,7 +14,7 @@ function collectPluginMentionResources(
   const resources: PluginMentionResource[] = [];
   for (const item of input) {
     if (item.type !== "text") continue;
-    for (const mention of item.mentions) {
+    for (const mention of item.mentions ?? []) {
       const resource = mention.resource;
       if (resource.kind !== "plugin") continue;
       const key = `${resource.pluginId}::${resource.itemId}`;

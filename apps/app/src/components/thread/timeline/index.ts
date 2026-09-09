@@ -13,6 +13,8 @@ export { ThreadContextWindowIndicator } from "./ThreadContextWindowIndicator.js"
 export type {
   ThreadTimelineEditMessageHandler,
   ThreadTimelineEditMessageTarget,
+  ThreadTimelineUndoTurnHandler,
+  ThreadTimelineUndoTurnTarget,
   ThreadTimelineInlineMessageEditor,
   ThreadTimelineForkMessageHandler,
   ThreadTimelineAddToChatHandler,

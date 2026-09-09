@@ -1341,4 +1341,66 @@ describe("fork branch point and inherited history", () => {
       ]);
     });
   });
+  it("supports cross-provider fork via HTTP route by injecting handoff context outline", async () => {
+    await withTestHarness({}, async (harness) => {
+      const { sourceThread, environment } = seedForkSource(harness);
+
+      seedEvent(harness.deps, {
+        threadId: sourceThread.id,
+        environmentId: environment.id,
+        providerThreadId: "provider-fork-source",
+        scope: turnScope("turn-fork-source"),
+        sequence: 4,
+        type: "item/completed",
+        data: {
+          item: {
+            type: "agentMessage",
+            id: "msg-source-1",
+            text: "Schema created with users and teams tables.",
+          },
+        },
+      });
+      seedEvent(harness.deps, {
+        threadId: sourceThread.id,
+        environmentId: environment.id,
+        providerThreadId: "provider-fork-source",
+        scope: turnScope("turn-fork-source"),
+        sequence: 5,
+        type: "turn/completed",
+        data: { status: "completed" },
+      });
+
+      const response = await postFork(harness, {
+        sourceThreadId: sourceThread.id,
+        providerId: "acp-opencode",
+        input: [{ type: "text", text: "Now implement migrations" }],
+      });
+
+      expect(response.status).toBe(201);
+      const fork = threadResponseSchema.parse(await readJson(response));
+      expect(fork.providerId).toBe("acp-opencode");
+
+      const start = await waitForQueuedCommand(
+        harness,
+        ({ command }) =>
+          command.type === "thread.start" && command.threadId === fork.id,
+      );
+      if (start.command.type !== "thread.start") {
+        throw new Error("Expected thread.start");
+      }
+      expect(start.command.providerId).toBe("acp-opencode");
+      expect(start.command.fork).toBeFalsy();
+
+      const handoffItem = start.command.input.find(
+        (item) =>
+          item.type === "text" &&
+          item.visibility === "agent-only" &&
+          item.text.includes("Context Handoff from Previous Thread"),
+      );
+      expect(handoffItem).toBeDefined();
+      if (handoffItem && handoffItem.type === "text") {
+        expect(handoffItem.text).toContain("Schema created with users and teams tables.");
+      }
+    });
+  });
 });

@@ -201,6 +201,7 @@ function createFakeWorkspace(
       commitSha: "commit-1",
       commitSubject: "commit",
     })),
+    revert: vi.fn(async () => []),
     reset: vi.fn(async () => undefined),
     setLocalStateFingerprint(value: GetLocalStateFingerprintResult) {
       localStateFingerprint = value;

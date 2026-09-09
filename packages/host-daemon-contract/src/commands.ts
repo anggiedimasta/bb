@@ -982,6 +982,17 @@ const workspacePullRequestActionCommandSchema = z.discriminatedUnion(
   ],
 );
 
+const workspaceRevertCommandSchema = hostDaemonWorkspaceTargetSchema
+  .extend({
+    type: z.literal("workspace.revert"),
+    paths: z.array(z.string()).optional(),
+  })
+  .strict();
+
+const workspaceRevertResultSchema = z.object({
+  revertedPaths: z.array(z.string()),
+});
+
 const workspaceCommitCommandSchema = hostDaemonWorkspaceTargetSchema
   .extend({
     type: z.literal("workspace.commit"),
@@ -1520,6 +1531,15 @@ export const hostDaemonCommandRegistry = {
     type: "environment.destroy",
     schema: environmentDestroyCommandSchema,
     resultSchema: environmentDestroyResultSchema,
+    transport: "settled",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: "write",
+  }),
+  "workspace.revert": defineHostDaemonCommandDescriptor({
+    type: "workspace.revert",
+    schema: workspaceRevertCommandSchema,
+    resultSchema: workspaceRevertResultSchema,
     transport: "settled",
     retryable: false,
     flushEventsBeforeResult: false,

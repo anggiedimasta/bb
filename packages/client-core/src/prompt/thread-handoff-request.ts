@@ -9,6 +9,7 @@ export interface ThreadHandoffCreateSeed {
   projectId: string;
   sourceThreadId: string;
   sourceThreadTitle: string;
+  targetProviderId?: string | null;
 }
 
 interface ThreadHandoffLocationState {
@@ -61,11 +62,18 @@ export function readThreadHandoffCreateSeedFromLocationState(
       ? value.environmentId
       : null;
 
+  const targetProviderId =
+    typeof value.targetProviderId === "string" &&
+    value.targetProviderId.length > 0
+      ? value.targetProviderId
+      : null;
+
   return {
     environmentId,
     projectId: value.projectId,
     sourceThreadId: value.sourceThreadId,
     sourceThreadTitle: value.sourceThreadTitle.trim(),
+    ...(targetProviderId ? { targetProviderId } : {}),
   };
 }
 

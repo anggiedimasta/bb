@@ -255,6 +255,7 @@ type ExpectedEnvironmentsKey =
   | "paths"
   | "pullRequest"
   | "status"
+  | "sync"
   | "update";
 
 type ExpectedFilesKey =
@@ -391,6 +392,7 @@ type ExpectedThreadsKey =
   | "timeline"
   | "timelineTurnSummaryDetails"
   | "unarchive"
+  | "undo"
   | "unpin"
   | "update"
   | "wait";

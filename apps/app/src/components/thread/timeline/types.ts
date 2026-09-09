@@ -93,3 +93,11 @@ export interface ThreadTimelineImageViewSrcTarget {
 export type ThreadTimelineImageViewSrcResolver = (
   target: ThreadTimelineImageViewSrcTarget,
 ) => string;
+
+export interface ThreadTimelineUndoTurnTarget {
+  targetSequence?: number;
+}
+
+export type ThreadTimelineUndoTurnHandler = (
+  target: ThreadTimelineUndoTurnTarget,
+) => void;

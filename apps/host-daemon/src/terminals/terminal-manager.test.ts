@@ -276,6 +276,7 @@ function createFakeWorkspace(path: string): HostWorkspace {
       commitSha: "commit-1",
       commitSubject: "commit",
     })),
+    revert: vi.fn(async () => []),
     reset: vi.fn(async () => undefined),
     runPullRequestAction: vi.fn(async () => undefined),
     destroy: vi.fn(async () => undefined),

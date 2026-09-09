@@ -151,6 +151,7 @@ export interface NewThreadComposerState {
   isSubmitting: boolean;
   seedEnvironmentSelectionValue: (value: string) => void;
   setEnvironmentSelectionValue: (value: string) => void;
+  setSelectedProviderId: (providerId: string) => void;
   setProviderModelReasoning: (selection: {
     providerId: string;
     model: string;
@@ -1478,6 +1479,7 @@ export function NewThreadComposer({
     isSubmitting,
     seedEnvironmentSelectionValue: setCreationEnvironmentSelectionValue,
     setEnvironmentSelectionValue: changeEnvironment,
+    setSelectedProviderId,
     setProviderModelReasoning,
     setPermissionMode,
     setServiceTier,

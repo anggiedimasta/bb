@@ -117,10 +117,14 @@ const workspaceWorkingTreeSchema = workspaceChangeStatsSchema.extend({
 });
 export type WorkspaceWorkingTree = z.infer<typeof workspaceWorkingTreeSchema>;
 
-const workspaceBranchSchema = z.object({
+export const workspaceBranchSchema = z.object({
   currentBranch: z.string().nullable(),
   defaultBranch: z.string(),
+  upstream: z.string().nullable().optional(),
+  aheadCount: z.number().optional(),
+  behindCount: z.number().optional(),
 });
+export type WorkspaceBranch = z.infer<typeof workspaceBranchSchema>;
 
 const workspaceMergeBaseSchema = workspaceChangeStatsSchema.extend({
   mergeBaseBranch: z.string(),

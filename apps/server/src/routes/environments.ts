@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import path from "node:path";
 import { updateEnvironmentMetadata } from "@bb/db";
 import {
@@ -572,6 +573,65 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
 
     try {
       switch (payload.action) {
+        case "sync": {
+          if (!environment.isGitRepo) {
+            throw new ApiError(
+              409,
+              "invalid_request",
+              "Sync requires a git environment",
+            );
+          }
+
+          const syncOutput = await new Promise<{ stdout: string; stderr: string }>(
+            (resolve, reject) => {
+              execFile(
+                "git",
+                ["pull"],
+                {
+                  cwd: environment.path,
+                  timeout: 60000,
+                  maxBuffer: 10 * 1024 * 1024,
+                },
+                (error, stdout, stderr) => {
+                  if (error) {
+                    reject(
+                      new ApiError(
+                        500,
+                        "git_sync_failed",
+                        stderr?.trim() || stdout?.trim() || error.message,
+                      ),
+                    );
+                  } else {
+                    resolve({ stdout, stderr });
+                  }
+                },
+              );
+            },
+          );
+
+          deps.workspaceReadCaches.invalidateEnvironment(environment.id);
+
+          const stdout = syncOutput.stdout.trim();
+          let summary = "Branch is up to date with remote.";
+          if (stdout.toLowerCase().includes("already up to date")) {
+            summary = "Already up to date with remote.";
+          } else {
+            const match = stdout.match(/(\d+\s+files?\s+changed[^\r\n]*)/i);
+            if (match) {
+              summary = match[1].trim();
+            } else if (stdout) {
+              const lines = stdout.split("\n").filter(Boolean);
+              summary = lines[lines.length - 1] || "Pulled latest changes.";
+            }
+          }
+
+          return context.json({
+            ok: true,
+            action: "sync",
+            message: "Branch synchronized",
+            summary,
+          });
+        }
         case "commit": {
           const target = requireWorkspaceCommandTarget(environment);
           const { workspaceContext } = target;

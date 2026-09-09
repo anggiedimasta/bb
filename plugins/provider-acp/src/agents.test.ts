@@ -244,6 +244,10 @@ describe("acpProviderDeclaration", () => {
     expect(byId.get("acp-opencode")?.experimental_bridgeOptions).toMatchObject({
       acpDialect: "opencode",
     });
+    expect(byId.get("acp-kiro")?.experimental_bridgeOptions).toMatchObject({
+      acpDialect: "kiro",
+    });
+    expect(byId.get("acp-kiro")?.maintenance?.usage).toBe(true);
     expect(
       byId.get("acp-opencode")?.capabilities.supportsManualCompaction,
     ).toBe(true);

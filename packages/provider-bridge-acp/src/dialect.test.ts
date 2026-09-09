@@ -3,6 +3,7 @@ import {
   CURSOR_ACP_DIALECT,
   GENERIC_ACP_DIALECT,
   GROK_ACP_DIALECT,
+  KIRO_ACP_DIALECT,
   OMP_ACP_DIALECT,
   OPENCODE_ACP_DIALECT,
   resolveAcpDialect,
@@ -17,6 +18,9 @@ describe("resolveAcpDialect", () => {
     expect(resolveAcpDialect({ dialectId: "cursor", command: "node" })).toBe(
       CURSOR_ACP_DIALECT,
     );
+    expect(resolveAcpDialect({ dialectId: "kiro", command: "node" })).toBe(
+      KIRO_ACP_DIALECT,
+    );
     expect(resolveAcpDialect({ dialectId: "opencode", command: "node" })).toBe(
       OPENCODE_ACP_DIALECT,
     );
@@ -29,6 +33,9 @@ describe("resolveAcpDialect", () => {
     );
     expect(resolveAcpDialect({ command: "cursor-agent" })).toBe(
       CURSOR_ACP_DIALECT,
+    );
+    expect(resolveAcpDialect({ command: "/usr/local/bin/kiro-cli" })).toBe(
+      KIRO_ACP_DIALECT,
     );
     expect(resolveAcpDialect({ command: "/opt/homebrew/bin/omp" })).toBe(
       OMP_ACP_DIALECT,

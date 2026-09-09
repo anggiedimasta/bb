@@ -8,9 +8,6 @@ import { CHROME_SUBTLE_ICON_BUTTON_FOREGROUND_CLASS } from "@bb/shared-ui/chrome
 import type { EnvironmentWorkspaceTypeLabel } from "@/lib/environment-workspace-display";
 import type { WorkspaceCheckoutDisplay } from "@/lib/workspace-checkout-display";
 
-const CHECKOUT_CHIP_BASE_CLASS_NAME =
-  "flex min-w-0 flex-1 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground";
-const CHECKOUT_CHIP_BUTTON_CLASS_NAME = `${CHECKOUT_CHIP_BASE_CLASS_NAME} cursor-pointer transition-colors hover:bg-state-hover hover:text-foreground`;
 
 interface ThreadEnvironmentSummaryProps {
   projectName?: string;
@@ -20,6 +17,8 @@ interface ThreadEnvironmentSummaryProps {
   environmentTypeLabel?: EnvironmentWorkspaceTypeLabel;
   environmentCheckout?: WorkspaceCheckoutDisplay;
   onCreateNewThreadInWorktree?: () => void;
+  onSyncBranch?: () => void;
+  isSyncingBranch?: boolean;
 }
 
 export const ThreadEnvironmentSummary = memo(function ThreadEnvironmentSummary({
@@ -30,6 +29,8 @@ export const ThreadEnvironmentSummary = memo(function ThreadEnvironmentSummary({
   environmentTypeLabel,
   environmentCheckout,
   onCreateNewThreadInWorktree,
+  onSyncBranch,
+  isSyncingBranch,
 }: ThreadEnvironmentSummaryProps) {
   if (
     !projectName &&
@@ -89,38 +90,92 @@ export const ThreadEnvironmentSummary = memo(function ThreadEnvironmentSummary({
           />
         </div>
       ) : null}
-      {environmentCheckout && checkoutCopyValue !== null ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
+      {environmentCheckout ? (
+        <div className="inline-flex shrink-0 items-center gap-0.5">
+          {checkoutCopyValue !== null ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  data-promptbox-hide-branch-compact=""
+                  className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-1.5 py-0.5 text-xs text-muted-foreground cursor-pointer transition-colors hover:bg-state-hover hover:text-foreground"
+                  onClick={() => {
+                    void copyToClipboardWithToast(checkoutCopyValue, {
+                      successMessage:
+                        environmentCheckout.copySuccessMessage ?? "Value copied",
+                      errorMessage:
+                        environmentCheckout.copyErrorMessage ??
+                        "Failed to copy value",
+                    });
+                  }}
+                >
+                  <Icon name="GitBranch" className="size-3.5 shrink-0" />
+                  <span className="whitespace-nowrap">{environmentCheckout.label}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{environmentCheckout.title}</TooltipContent>
+            </Tooltip>
+          ) : (
+            <span
               data-promptbox-hide-branch-compact=""
-              className={CHECKOUT_CHIP_BUTTON_CLASS_NAME}
-              onClick={() => {
-                void copyToClipboardWithToast(checkoutCopyValue, {
-                  successMessage:
-                    environmentCheckout.copySuccessMessage ?? "Value copied",
-                  errorMessage:
-                    environmentCheckout.copyErrorMessage ??
-                    "Failed to copy value",
-                });
-              }}
+              className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-1.5 py-0.5 text-xs text-muted-foreground"
+              title={environmentCheckout.title}
             >
               <Icon name="GitBranch" className="size-3.5 shrink-0" />
-              <span className="truncate">{environmentCheckout.label}</span>
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>{environmentCheckout.title}</TooltipContent>
-        </Tooltip>
-      ) : environmentCheckout ? (
-        <span
-          data-promptbox-hide-branch-compact=""
-          className={CHECKOUT_CHIP_BASE_CLASS_NAME}
-          title={environmentCheckout.title}
-        >
-          <Icon name="GitBranch" className="size-3.5 shrink-0" />
-          <span className="truncate">{environmentCheckout.label}</span>
-        </span>
+              <span className="whitespace-nowrap">{environmentCheckout.label}</span>
+            </span>
+          )}
+          {environmentCheckout.syncLabel ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  disabled={isSyncingBranch}
+                  aria-label={`Sync branch: ${environmentCheckout.syncLabel}`}
+                  className={cn(
+                    "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 text-xs leading-none cursor-pointer transition-colors hover:bg-state-hover",
+                    (environmentCheckout.behindCount ?? 0) > 0 ||
+                      (environmentCheckout.aheadCount ?? 0) > 0
+                      ? "text-foreground font-medium"
+                      : "text-muted-foreground",
+                    isSyncingBranch && "opacity-70 cursor-wait",
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSyncBranch?.();
+                  }}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={cn(
+                      "size-3 shrink-0",
+                      isSyncingBranch && "animate-spin",
+                    )}
+                  >
+                    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                    <path d="M21 3v5h-5" />
+                    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                    <path d="M3 21v-5h5" />
+                  </svg>
+                  <span className="whitespace-nowrap select-none">{environmentCheckout.syncLabel}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {isSyncingBranch
+                  ? "Synchronizing branch..."
+                  : `Synchronize Changes: ${environmentCheckout.behindCount ?? 0} to pull, ${environmentCheckout.aheadCount ?? 0} to push. Click to sync.`}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+        </div>
       ) : null}
       {onCreateNewThreadInWorktree ? (
         <Tooltip>

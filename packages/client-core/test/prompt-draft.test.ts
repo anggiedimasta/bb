@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PromptMentionResource } from "@bb/domain";
 import {
   appendQuoteAndAttachmentsToDraft,
+  appendValueToPromptDraft,
   appendQuoteToDraftText,
   emptyPromptDraftState,
   isPromptDraftEmpty,
@@ -390,6 +391,130 @@ describe("appendQuoteAndAttachmentsToDraft", () => {
           sizeBytes: 0,
         },
       ],
+    });
+  });
+
+  describe("appendValueToPromptDraft", () => {
+    it("appends mention value to an empty draft", () => {
+      const mention = {
+        start: 0,
+        end: 13,
+        resource: {
+          kind: "path" as const,
+          source: "workspace" as const,
+          entryKind: "file" as const,
+          path: "src/index.ts",
+          label: "index.ts",
+        },
+      };
+      const result = appendValueToPromptDraft(emptyPromptDraftState(), {
+        text: "@src/index.ts ",
+        mentions: [mention],
+      });
+      expect(result).toEqual({
+        text: "@src/index.ts ",
+        mentions: [mention],
+        attachments: [],
+      });
+    });
+
+    it("adds a separating space when draft does not end with whitespace and shifts mentions", () => {
+      const initial = {
+        text: "hello",
+        mentions: [],
+        attachments: [],
+      };
+      const mention = {
+        start: 0,
+        end: 13,
+        resource: {
+          kind: "path" as const,
+          source: "workspace" as const,
+          entryKind: "file" as const,
+          path: "src/index.ts",
+          label: "index.ts",
+        },
+      };
+      const result = appendValueToPromptDraft(initial, {
+        text: "@src/index.ts ",
+        mentions: [mention],
+      });
+      expect(result.text).toBe("hello @src/index.ts ");
+      expect(result.mentions).toEqual([
+        {
+          ...mention,
+          start: 6,
+          end: 19,
+        },
+      ]);
+    });
+
+    it("does not add an extra space when draft already ends with whitespace", () => {
+      const initial = {
+        text: "hello ",
+        mentions: [],
+        attachments: [],
+      };
+      const mention = {
+        start: 0,
+        end: 13,
+        resource: {
+          kind: "path" as const,
+          source: "workspace" as const,
+          entryKind: "file" as const,
+          path: "src/index.ts",
+          label: "index.ts",
+        },
+      };
+      const result = appendValueToPromptDraft(initial, {
+        text: "@src/index.ts ",
+        mentions: [mention],
+      });
+      expect(result.text).toBe("hello @src/index.ts ");
+      expect(result.mentions[0].start).toBe(6);
+      expect(result.mentions[0].end).toBe(19);
+    });
+
+    it("correctly chains multiple dropped mentions", () => {
+      let draft = emptyPromptDraftState();
+      draft = appendValueToPromptDraft(draft, {
+        text: "@file1.ts ",
+        mentions: [
+          {
+            start: 0,
+            end: 10,
+            resource: {
+              kind: "path" as const,
+              source: "workspace" as const,
+              entryKind: "file" as const,
+              path: "file1.ts",
+              label: "file1.ts",
+            },
+          },
+        ],
+      });
+      draft = appendValueToPromptDraft(draft, {
+        text: "@file2.ts ",
+        mentions: [
+          {
+            start: 0,
+            end: 10,
+            resource: {
+              kind: "path" as const,
+              source: "workspace" as const,
+              entryKind: "file" as const,
+              path: "file2.ts",
+              label: "file2.ts",
+            },
+          },
+        ],
+      });
+      expect(draft.text).toBe("@file1.ts @file2.ts ");
+      expect(draft.mentions).toHaveLength(2);
+      expect(draft.mentions[0].start).toBe(0);
+      expect(draft.mentions[0].end).toBe(10);
+      expect(draft.mentions[1].start).toBe(10);
+      expect(draft.mentions[1].end).toBe(20);
     });
   });
 

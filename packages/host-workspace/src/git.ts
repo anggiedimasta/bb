@@ -827,6 +827,44 @@ function parsePorcelainPath(rawPath: string): string {
   return parsePorcelainPathToken(rawPath, sourcePath.nextIndex + 4).value;
 }
 
+export interface PorcelainBranchHeader {
+  branch: string | null;
+  upstream: string | null;
+  aheadCount: number;
+  behindCount: number;
+}
+
+export function parsePorcelainBranchHeader(
+  statusOutput: string,
+): PorcelainBranchHeader {
+  const firstLine = statusOutput
+    .split("\n")
+    .find((line) => line.startsWith("##"));
+  if (!firstLine) {
+    return { branch: null, upstream: null, aheadCount: 0, behindCount: 0 };
+  }
+  const line = firstLine.slice(2).trim();
+  const match = line.match(/^([^\s.]+)(?:\.\.\.([^\s[\]]+))?(?:\s+\[(.*?)\])?$/);
+  if (!match) {
+    return { branch: null, upstream: null, aheadCount: 0, behindCount: 0 };
+  }
+  const [, branch, upstream, counts] = match;
+  let aheadCount = 0;
+  let behindCount = 0;
+  if (counts) {
+    const aheadMatch = counts.match(/ahead\s+(\d+)/);
+    const behindMatch = counts.match(/behind\s+(\d+)/);
+    if (aheadMatch) aheadCount = Number.parseInt(aheadMatch[1], 10);
+    if (behindMatch) behindCount = Number.parseInt(behindMatch[1], 10);
+  }
+  return {
+    branch: branch === "HEAD" ? null : branch,
+    upstream: upstream ?? null,
+    aheadCount,
+    behindCount,
+  };
+}
+
 export function parsePorcelainEntries(statusOutput: string): PorcelainEntry[] {
   return statusOutput
     .split("\n")

@@ -37,6 +37,7 @@ import {
 } from "./project-execution-defaults.js";
 import { validatePromptAttachmentReferences } from "../projects/attachments.js";
 import { resolvePluginMentionContextInputs } from "../plugins/plugin-mentions.js";
+import { resolveThreadMentionContextInputs } from "./thread-mentions.js";
 import {
   attemptDispatch,
   hostIdForEnvironmentIntent,
@@ -583,6 +584,13 @@ export async function createThreadFromRequest(
   if (pluginMentionContext.length > 0) {
     requestInput.input = [...requestInput.input, ...pluginMentionContext];
   }
+  const threadMentionContext = await resolveThreadMentionContextInputs(
+    deps,
+    requestInput.input,
+  );
+  if (threadMentionContext.length > 0) {
+    requestInput.input = [...requestInput.input, ...threadMentionContext];
+  }
   assertProjectWorkspaceCompatibility(project, requestInput);
   const originKind = requestInput.originKind ?? null;
   const sourceThreadId =
@@ -867,7 +875,12 @@ export async function createThreadFromRequest(
     sourceThread,
   });
 
-  if (request.originKind !== null && fork === null) {
+  const isCrossProviderFork =
+    sourceThread !== null &&
+    request.originKind !== null &&
+    sourceThread.providerId !== request.providerId;
+
+  if (request.originKind !== null && fork === null && !isCrossProviderFork) {
     throw new ApiError(
       400,
       "fork_source_session_unavailable",

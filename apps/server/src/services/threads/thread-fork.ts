@@ -6,6 +6,7 @@ import { ApiError } from "../../errors.js";
 import { resolveExistingThreadPermissionMode } from "./thread-execution-plan.js";
 import { getLastExecutionOptions } from "./thread-events.js";
 import { createThreadFromRequest } from "./thread-create.js";
+import { buildThreadHandoffSummary } from "./thread-mentions.js";
 
 type ThreadForkDeps = LoggedPendingInteractionWorkSessionDeps;
 
@@ -63,14 +64,43 @@ export async function createThreadForkFromRequest(
   request: ForkThreadRequest,
 ) {
   const sourceThread = requireForkSourceThread(deps, request.sourceThreadId);
-  requireForkCapableProvider(deps, sourceThread);
+  const targetProviderId = request.providerId ?? sourceThread.providerId;
+  const isCrossProviderFork = targetProviderId !== sourceThread.providerId;
+
+  if (!isCrossProviderFork) {
+    requireForkCapableProvider(deps, sourceThread);
+  }
   const sourceEnvironment = requireSourceEnvironment(deps, sourceThread);
   const sourceExecution = getLastExecutionOptions(deps, sourceThread.id);
   const visibleInput = request.input ?? [];
-  const agentContextSeed = request.agentContextSeed ?? [];
+  const userAgentContextSeed = request.agentContextSeed ?? [];
+
+  const handoffSeed: PromptInput[] = [];
+  if (isCrossProviderFork) {
+    const summary = buildThreadHandoffSummary(deps.db, sourceThread);
+    if (summary) {
+      handoffSeed.push({
+        type: "text",
+        text: summary,
+        mentions: [],
+        visibility: "agent-only",
+      });
+    }
+  }
+
+  const agentContextSeed: PromptInput[] = [
+    ...handoffSeed,
+    ...userAgentContextSeed,
+  ];
   const input: PromptInput[] = [...agentContextSeed, ...visibleInput];
   const isSeedOnlyIdleFork =
     visibleInput.length === 0 && agentContextSeed.length > 0;
+
+  const resolvedModel =
+    request.model ??
+    (!isCrossProviderFork && sourceExecution?.model
+      ? sourceExecution.model
+      : undefined);
 
   return createThreadFromRequest(
     deps,
@@ -88,7 +118,7 @@ export async function createThreadForkFromRequest(
       permissionMode:
         request.permissionMode ??
         resolveExistingThreadPermissionMode(deps, sourceThread.id),
-      ...(sourceExecution?.model ? { model: sourceExecution.model } : {}),
+      ...(resolvedModel ? { model: resolvedModel } : {}),
       ...(sourceExecution?.reasoningLevel
         ? { reasoningLevel: sourceExecution.reasoningLevel }
         : {}),
@@ -96,8 +126,8 @@ export async function createThreadForkFromRequest(
         ? { serviceTier: sourceExecution.serviceTier }
         : {}),
       projectId: sourceThread.projectId,
-      providerId: sourceThread.providerId,
-      ...(request.sourceSeqEnd === undefined
+      providerId: targetProviderId,
+      ...(isCrossProviderFork || request.sourceSeqEnd === undefined
         ? {}
         : { sourceSeqEnd: request.sourceSeqEnd }),
       sourceThreadId: sourceThread.id,

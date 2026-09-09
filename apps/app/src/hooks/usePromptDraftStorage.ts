@@ -1,8 +1,10 @@
 import { useCallback, useMemo, useSyncExternalStore } from "react";
-import type { PromptTextMention } from "@bb/domain";
+import type { PromptMentionResource, PromptTextMention } from "@bb/domain";
+import { serializedTextForPromptMentionResource } from "@/components/promptbox/mentions/prompt-mention-clipboard";
 import type { PromptDraftAttachment, PromptDraftState } from "@bb/client-core";
 import {
   appendQuoteAndAttachmentsToDraft,
+  appendValueToPromptDraft,
   arePromptDraftStatesEqual,
   emptyPromptDraftState,
   isPromptDraftEmpty,
@@ -241,6 +243,28 @@ function addQuoteToPromptDraft(
 
   writePromptDraft(storageKey, nextDraft);
 }
+function addMentionToPromptDraft(
+  storageKey: string,
+  resource: PromptMentionResource,
+): void {
+  const currentDraft = readPromptDraft(storageKey);
+  const mentionText = serializedTextForPromptMentionResource(resource);
+  const nextDraft = appendValueToPromptDraft(currentDraft, {
+    text: `${mentionText} `,
+    mentions: [
+      {
+        start: 0,
+        end: mentionText.length,
+        resource,
+      },
+    ],
+  });
+  if (nextDraft === currentDraft) {
+    return;
+  }
+
+  writePromptDraft(storageKey, nextDraft);
+}
 
 function getPromptDraftStorageKey(scope: PromptDraftScope): string {
   if (scope.kind === "automation-edit") {
@@ -268,6 +292,7 @@ export function getPromptDraftAccessor(scope: PromptDraftScope): {
     text: string,
     attachments?: readonly PromptDraftAttachment[],
   ) => void;
+  addMention: (resource: PromptMentionResource) => void;
 } {
   const storageKey = getPromptDraftStorageKey(scope);
   return {
@@ -277,6 +302,8 @@ export function getPromptDraftAccessor(scope: PromptDraftScope): {
     setDraft: (draft) => writePromptDraft(storageKey, draft),
     addQuote: (text, attachments) =>
       addQuoteToPromptDraft(storageKey, text, attachments),
+    addMention: (resource) =>
+      addMentionToPromptDraft(storageKey, resource),
   };
 }
 
@@ -362,6 +389,12 @@ export function usePromptDraftStorage(scope: PromptDraftScope) {
     [storageKey],
   );
 
+  const addMention = useCallback(
+    (resource: PromptMentionResource) =>
+      addMentionToPromptDraft(storageKey, resource),
+    [storageKey],
+  );
+
   const clear = useCallback(() => {
     setDraftAndPersist(EMPTY_PROMPT_DRAFT);
   }, [setDraftAndPersist]);
@@ -412,12 +445,14 @@ export function usePromptDraftStorage(scope: PromptDraftScope) {
       addAttachment,
       removeAttachment,
       addQuote,
+      addMention,
       clear,
       clearIfCurrentMatches,
       restoreIfEmpty,
     }),
     [
       addAttachment,
+      addMention,
       addQuote,
       clear,
       clearIfCurrentMatches,

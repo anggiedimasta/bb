@@ -24,8 +24,11 @@ import {
 } from "@/components/promptbox/FollowUpPromptBox";
 import {
   useComposerHostDraftNotifier,
+  usePluginComposerHost,
   type PluginComposerHost,
 } from "@/components/plugin/plugin-composer-host";
+import { useThreadChatDropTarget } from "./useThreadChatDropTarget";
+import { ThreadChatDropOverlay } from "./ThreadChatDropOverlay";
 import { ThreadPendingInteractionBanner } from "@/components/thread/pending-interactions/ThreadPendingInteractionBanner";
 import {
   QueuedMessagesList,
@@ -206,11 +209,23 @@ function EmbeddedThreadChatHostedFooter({
   scrollOverlay,
   surface,
 }: EmbeddedThreadChatHostedFooterProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const composerHost = usePluginComposerHost();
+  const { isDragOver, dropProps } = useThreadChatDropTarget({
+    containerRef,
+    threadId: surface.threadId,
+    projectId: surface.projectId,
+    composerHost,
+  });
+
   return (
     <div
+      ref={containerRef}
       data-thread-window=""
-      className="flex h-full min-h-0 min-w-0 flex-col overflow-clip"
+      className="relative flex h-full min-h-0 min-w-0 flex-col overflow-clip"
+      {...dropProps}
     >
+      <ThreadChatDropOverlay isDragOver={isDragOver} />
       <PageShell
         key={surface.threadId}
         scrollBehavior="bottom-anchor"
@@ -801,6 +816,16 @@ function EmbeddedThreadChatWithComposer({
   ]);
   const activeBottomPluginComposerHost = bottomPluginComposerHost;
   const activeQueuedPluginComposerHost = queuedPluginComposerHost;
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const contextComposerHost = usePluginComposerHost();
+  const activeComposerHost =
+    activeBottomPluginComposerHost ?? contextComposerHost;
+  const { isDragOver, dropProps } = useThreadChatDropTarget({
+    containerRef,
+    threadId,
+    projectId,
+    composerHost: activeComposerHost,
+  });
   const bottomComposerTextEffects = useComposerTextEffects(
     activeBottomPluginComposerHost?.textEffectKey ?? null,
   );
@@ -1223,10 +1248,13 @@ function EmbeddedThreadChatWithComposer({
 
   return (
     <div
+      ref={containerRef}
       data-thread-window=""
       data-surface-tone={surfaceTone}
-      className="flex min-h-0 flex-1 flex-col"
+      className="relative flex min-h-0 flex-1 flex-col"
+      {...dropProps}
     >
+      <ThreadChatDropOverlay isDragOver={isDragOver} />
       <BottomAnchoredScrollBody
         key={surfaceKey}
         scrollAreaClassName={surfaceClassName}
