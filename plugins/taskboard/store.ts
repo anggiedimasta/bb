@@ -738,7 +738,15 @@ export function createWorkItemStore(bb: BbPluginApi) {
               item.item_key LIKE :query ESCAPE '\\' COLLATE NOCASE OR
               item.title LIKE :query ESCAPE '\\' COLLATE NOCASE OR
               item.description LIKE :query ESCAPE '\\' COLLATE NOCASE OR
-              item.project LIKE :query ESCAPE '\\' COLLATE NOCASE
+              item.project LIKE :query ESCAPE '\\' COLLATE NOCASE OR
+              json_extract(item.hierarchy_json, '$.storyKey')
+                LIKE :query ESCAPE '\\' COLLATE NOCASE OR
+              json_extract(item.hierarchy_json, '$.storySummary')
+                LIKE :query ESCAPE '\\' COLLATE NOCASE OR
+              json_extract(item.hierarchy_json, '$.epicKey')
+                LIKE :query ESCAPE '\\' COLLATE NOCASE OR
+              json_extract(item.hierarchy_json, '$.epicSummary')
+                LIKE :query ESCAPE '\\' COLLATE NOCASE
             )
             AND (
               :stateCount = 0 OR
