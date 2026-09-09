@@ -260,6 +260,60 @@ interface DerivedWorklogState {
   markers: string[];
 }
 
+const JIRA_EXTRA_FIELDS: ReadonlyArray<{ id: string; label: string }> = [
+  { id: 'customfield_10033', label: 'Platform Engineer' },
+  { id: 'customfield_11397', label: 'PIC Lead Engineer' },
+  { id: 'customfield_11398', label: 'PIC Lead QA' },
+  { id: 'customfield_11431', label: 'Story Point PE' },
+  { id: 'customfield_10024', label: 'Story Point' },
+  { id: 'customfield_10069', label: 'Story Point' },
+  { id: 'customfield_10016', label: 'Story point estimate' }
+];
+
+function jiraFieldToText(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') return value.trim() || null;
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (Array.isArray(value)) {
+    const parts = value.map(jiraFieldToText).filter((v): v is string => !!v);
+    return parts.length > 0 ? parts.join(', ') : null;
+  }
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const candidate =
+      record.displayName ?? record.value ?? record.name ?? record.timeSpent;
+    return typeof candidate === 'string'
+      ? candidate.trim() || null
+      : typeof candidate === 'number'
+        ? String(candidate)
+        : null;
+  }
+  return null;
+}
+
+function extraFieldsFromIssue(
+  issue: z.infer<typeof jiraIssueSchema>
+): Array<{ label: string; value: string }> {
+  const fields = issue.fields as unknown as Record<string, unknown>;
+  const seenLabels = new Set<string>();
+  const out: Array<{ label: string; value: string }> = [];
+  for (const { id, label } of JIRA_EXTRA_FIELDS) {
+    if (seenLabels.has(label)) continue;
+    const text = jiraFieldToText(fields[id]);
+    if (text) {
+      out.push({ label, value: text });
+      seenLabels.add(label);
+    }
+  }
+  const timeSpent = jiraFieldToText(fields.timespent);
+  if (timeSpent && /^\d+$/u.test(timeSpent)) {
+    const minutes = Math.round(Number(timeSpent) / 60);
+    out.push({ label: 'Time logged', value: `${minutes}m` });
+  }
+  return out;
+}
+
 function deriveWorklogState(
   worklogs: Array<{ comment: unknown; authorAccountId: string | null }>,
   myAccountId: string | null
@@ -311,6 +365,7 @@ function toItem(
       ? [...derived.markers, ...issue.fields.labels]
       : issue.fields.labels,
     updatedAt: issue.fields.updated,
+    extraFields: extraFieldsFromIssue(issue),
     comments: (issue.fields.comment?.comments ?? []).map(comment => ({
       author: comment.author.displayName,
       body: adfText(comment.body).trim(),
@@ -456,6 +511,14 @@ export function createJiraAdapter(options: {
       'assignee',
       'project',
       'labels',
+      'timespent',
+      'customfield_10033',
+      'customfield_11397',
+      'customfield_11398',
+      'customfield_11431',
+      'customfield_10024',
+      'customfield_10069',
+      'customfield_10016',
       ...(flags.comments ? ['comment'] : [])
     ].join(',');
     const payload = await jiraRequest(
@@ -708,7 +771,15 @@ export function createJiraAdapter(options: {
               'priority',
               'assignee',
               'project',
-              'labels'
+              'labels',
+              'timespent',
+              'customfield_10033',
+              'customfield_11397',
+              'customfield_11398',
+              'customfield_11431',
+              'customfield_10024',
+              'customfield_10069',
+              'customfield_10016'
             ],
             ...(nextPageToken ? { nextPageToken } : {})
           })

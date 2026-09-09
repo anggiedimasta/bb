@@ -4758,7 +4758,10 @@ function DetailMetadata({
     ['Priority', item.priority ?? 'None'],
     ['Assignee', item.assignee ?? 'Unassigned'],
     ['External project', item.project ?? 'None'],
-    ['Updated', formatUpdatedAt(item.updatedAt)]
+    ['Updated', formatUpdatedAt(item.updatedAt)],
+    ...(item.extraFields ?? []).map(
+      field => [field.label, field.value] as const
+    )
   ] as const;
   return (
     <dl className={cn('grid grid-cols-2 gap-x-4 gap-y-3', className)}>

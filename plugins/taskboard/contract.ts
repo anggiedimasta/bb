@@ -151,7 +151,10 @@ export const workItemSchema = z
     assignee: z.string().nullable(),
     project: z.string().nullable(),
     labels: z.array(z.string()),
-    updatedAt: z.string()
+    updatedAt: z.string(),
+    extraFields: z
+      .array(z.object({ label: z.string(), value: z.string() }).strict())
+      .optional()
   })
   .strict();
 export type WorkItem = z.infer<typeof workItemSchema>;
