@@ -236,6 +236,190 @@ function adfText(value: unknown): string {
     : joined;
 }
 
+interface AdfNode {
+  type?: string;
+  text?: string;
+  content?: AdfNode[];
+  marks?: Array<{ type?: string; attrs?: Record<string, unknown> }>;
+  attrs?: Record<string, unknown>;
+}
+
+function asAdfNode(value: unknown): AdfNode | null {
+  return value && typeof value === 'object' ? (value as AdfNode) : null;
+}
+
+function applyMarks(text: string, marks: AdfNode['marks']): string {
+  if (!text) return text;
+  let out = text;
+  for (const mark of marks ?? []) {
+    switch (mark.type) {
+      case 'strong':
+        out = `**${out}**`;
+        break;
+      case 'em':
+        out = `*${out}*`;
+        break;
+      case 'code':
+        out = `\`${out}\``;
+        break;
+      case 'strike':
+        out = `~~${out}~~`;
+        break;
+      case 'link': {
+        const href = mark.attrs?.href;
+        if (typeof href === 'string') out = `[${out}](${href})`;
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  return out;
+}
+
+function adfInline(nodes: AdfNode[] | undefined): string {
+  if (!nodes) return '';
+  let out = '';
+  for (const node of nodes) {
+    switch (node.type) {
+      case 'text':
+        out += applyMarks(node.text ?? '', node.marks);
+        break;
+      case 'hardBreak':
+        out += '\n';
+        break;
+      case 'inlineCard': {
+        const url = node.attrs?.url;
+        if (typeof url === 'string') out += url;
+        break;
+      }
+      case 'mention': {
+        const label = node.attrs?.text;
+        if (typeof label === 'string') out += label;
+        break;
+      }
+      case 'emoji': {
+        const short = node.attrs?.shortName ?? node.attrs?.text;
+        if (typeof short === 'string') out += short;
+        break;
+      }
+      default:
+        if (node.content) out += adfInline(node.content);
+        break;
+    }
+  }
+  return out;
+}
+
+function adfBlocks(nodes: AdfNode[] | undefined, depth = 0): string {
+  if (!nodes) return '';
+  const parts: string[] = [];
+  for (const node of nodes) {
+    switch (node.type) {
+      case 'paragraph':
+        parts.push(adfInline(node.content));
+        break;
+      case 'heading': {
+        const level = Math.min(
+          6,
+          Math.max(1, Number(node.attrs?.level) || 1)
+        );
+        parts.push(`${'#'.repeat(level)} ${adfInline(node.content)}`);
+        break;
+      }
+      case 'bulletList':
+      case 'orderedList': {
+        const ordered = node.type === 'orderedList';
+        const items = node.content ?? [];
+        const lines = items.map((item, index) => {
+          const marker = ordered ? `${index + 1}.` : '-';
+          const inner = adfBlocks(item.content, depth + 1).trimEnd();
+          const indented = inner
+            .split('\n')
+            .map((line, i) => (i === 0 ? line : `  ${line}`))
+            .join('\n');
+          return `${'  '.repeat(depth)}${marker} ${indented}`;
+        });
+        parts.push(lines.join('\n'));
+        break;
+      }
+      case 'codeBlock': {
+        const language =
+          typeof node.attrs?.language === 'string' ? node.attrs.language : '';
+        const code = (node.content ?? [])
+          .map(child => child.text ?? '')
+          .join('');
+        parts.push(`\`\`\`${language}\n${code}\n\`\`\``);
+        break;
+      }
+      case 'blockquote':
+        parts.push(
+          adfBlocks(node.content, depth)
+            .split('\n')
+            .map(line => `> ${line}`)
+            .join('\n')
+        );
+        break;
+      case 'panel': {
+        const panelType =
+          typeof node.attrs?.panelType === 'string'
+            ? node.attrs.panelType
+            : 'info';
+        const body = adfBlocks(node.content, depth);
+        parts.push(
+          `> [!${panelType.toUpperCase()}]\n` +
+            body
+              .split('\n')
+              .map(line => `> ${line}`)
+              .join('\n')
+        );
+        break;
+      }
+      case 'rule':
+        parts.push('---');
+        break;
+      case 'table': {
+        const rows = node.content ?? [];
+        const rendered: string[] = [];
+        rows.forEach((row, rowIndex) => {
+          const cells = (row.content ?? []).map(cell =>
+            adfBlocks(cell.content, depth).replace(/\n+/gu, ' ').trim()
+          );
+          rendered.push(`| ${cells.join(' | ')} |`);
+          if (rowIndex === 0) {
+            rendered.push(`| ${cells.map(() => '---').join(' | ')} |`);
+          }
+        });
+        parts.push(rendered.join('\n'));
+        break;
+      }
+      case 'mediaSingle':
+      case 'mediaGroup': {
+        const media = (node.content ?? []).find(m => m.type === 'media');
+        const alt =
+          typeof media?.attrs?.alt === 'string' ? media.attrs.alt : 'attachment';
+        const url = media?.attrs?.url;
+        if (typeof url === 'string') {
+          parts.push(`![${alt}](${url})`);
+        } else {
+          parts.push(`_[${alt}]_`);
+        }
+        break;
+      }
+      default:
+        if (node.content) parts.push(adfBlocks(node.content, depth));
+        break;
+    }
+  }
+  return parts.filter(part => part.length > 0).join('\n\n');
+}
+
+function adfToMarkdown(value: unknown): string {
+  const root = asAdfNode(value);
+  if (!root) return typeof value === 'string' ? value : '';
+  return adfBlocks(root.content ?? []).trim();
+}
+
 function stateCategory(key: string): WorkStateCategory {
   if (key === 'done') return 'done';
   if (key === 'indeterminate') return 'in_progress';
@@ -352,7 +536,7 @@ function toItem(
     locator: issue.key,
     key: issue.key,
     title: issue.fields.summary,
-    description: adfText(issue.fields.description).trim(),
+    description: adfToMarkdown(issue.fields.description),
     url: `${baseUrl}/browse/${encodeURIComponent(issue.key)}`,
     status: derived ? derived.status : issue.fields.status.name,
     stateCategory: derived
@@ -368,7 +552,7 @@ function toItem(
     extraFields: extraFieldsFromIssue(issue),
     comments: (issue.fields.comment?.comments ?? []).map(comment => ({
       author: comment.author.displayName,
-      body: adfText(comment.body).trim(),
+      body: adfToMarkdown(comment.body),
       createdAt: comment.created
     }))
   };
