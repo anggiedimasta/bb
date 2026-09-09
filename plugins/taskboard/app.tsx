@@ -4356,7 +4356,7 @@ function TrackerList({
         ...(stateFilterEnabled && stateCategories.length > 0
           ? { stateCategories }
           : {}),
-        limit: 500
+        limit: 2000
       });
       if (requestRevision !== requestRevisionRef.current) return;
       const provider = result.provider;

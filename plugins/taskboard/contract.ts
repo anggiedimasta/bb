@@ -300,7 +300,7 @@ const listInputSchema = z
     source: workSourceSchema.optional(),
     query: z.string().optional(),
     stateCategories: z.array(workStateCategorySchema).optional(),
-    limit: z.number().int().min(1).max(500).default(200)
+    limit: z.number().int().min(1).max(2000).default(200)
   })
   .strict();
 
