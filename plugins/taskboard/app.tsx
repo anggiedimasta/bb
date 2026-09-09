@@ -3275,6 +3275,163 @@ function WorkItemRow({
   );
 }
 
+function epicSortValue(item: WorkItem): string {
+  return item.epicExpectedStart ?? item.epicExpectedDone ?? '\uffff';
+}
+
+function groupItemsByEpicStory(items: readonly WorkItem[]): Array<{
+  epicKey: string | null;
+  epicSummary: string | null;
+  epicExpectedStart: string | null;
+  epicExpectedDone: string | null;
+  stories: Array<{
+    storyKey: string | null;
+    storySummary: string | null;
+    items: WorkItem[];
+  }>;
+}> {
+  const epics = new Map<
+    string,
+    {
+      epicKey: string | null;
+      epicSummary: string | null;
+      epicExpectedStart: string | null;
+      epicExpectedDone: string | null;
+      stories: Map<
+        string,
+        { storyKey: string | null; storySummary: string | null; items: WorkItem[] }
+      >;
+    }
+  >();
+  for (const item of items) {
+    const epicId = item.epicKey ?? '__no_epic__';
+    let epic = epics.get(epicId);
+    if (!epic) {
+      epic = {
+        epicKey: item.epicKey ?? null,
+        epicSummary: item.epicSummary ?? null,
+        epicExpectedStart: item.epicExpectedStart ?? null,
+        epicExpectedDone: item.epicExpectedDone ?? null,
+        stories: new Map()
+      };
+      epics.set(epicId, epic);
+    }
+    const storyId = item.storyKey ?? '__no_story__';
+    let story = epic.stories.get(storyId);
+    if (!story) {
+      story = {
+        storyKey: item.storyKey ?? null,
+        storySummary: item.storySummary ?? null,
+        items: []
+      };
+      epic.stories.set(storyId, story);
+    }
+    story.items.push(item);
+  }
+  return [...epics.values()]
+    .sort((a, b) => {
+      const av = a.epicExpectedStart ?? a.epicExpectedDone ?? '\uffff';
+      const bv = b.epicExpectedStart ?? b.epicExpectedDone ?? '\uffff';
+      return av.localeCompare(bv);
+    })
+    .map(epic => ({
+      epicKey: epic.epicKey,
+      epicSummary: epic.epicSummary,
+      epicExpectedStart: epic.epicExpectedStart,
+      epicExpectedDone: epic.epicExpectedDone,
+      stories: [...epic.stories.values()]
+    }));
+}
+
+function EpicStoryGroups({
+  items,
+  statusOrder,
+  projectsById,
+  idPrefix,
+  collapsedGroups,
+  searchActive,
+  onToggleGroup,
+  onMove,
+  onOpen
+}: {
+  items: readonly WorkItem[];
+  statusOrder: readonly string[];
+  projectsById: ReadonlyMap<string, TrackerProject>;
+  idPrefix: string;
+  collapsedGroups: Readonly<Record<string, boolean>>;
+  searchActive: boolean;
+  onToggleGroup: (groupKey: string, category: WorkStateCategory) => void;
+  onMove: (item: WorkItem, option: WorkStatusOption) => Promise<void>;
+  onOpen: (item: WorkItem) => void;
+}) {
+  const groups = groupItemsByEpicStory(items);
+  return (
+    <>
+      {groups.map(epic => {
+        const epicId = epic.epicKey ?? 'no-epic';
+        const dates = [
+          epic.epicExpectedStart ? `start ${epic.epicExpectedStart}` : null,
+          epic.epicExpectedDone ? `done ${epic.epicExpectedDone}` : null
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        return (
+          <section
+            key={epicId}
+            aria-label={epic.epicKey ?? 'No epic'}
+            className="border-b border-border last:border-b-0"
+          >
+            <h2 className="tb-project-strip sticky top-0 z-20 flex h-8 items-center gap-2 border-b px-2.5 text-xs font-semibold">
+              <Icon name="Layers" className="size-3.5 text-muted-foreground" />
+              <span className="truncate">
+                {epic.epicKey
+                  ? `${epic.epicKey}${epic.epicSummary ? ` · ${epic.epicSummary}` : ''}`
+                  : 'No epic'}
+              </span>
+              {dates ? (
+                <span className="ml-auto shrink-0 font-normal tabular-nums text-muted-foreground">
+                  {dates}
+                </span>
+              ) : null}
+            </h2>
+            {epic.stories.map(story => {
+              const storyId = `${epicId}:${story.storyKey ?? 'no-story'}`;
+              return (
+                <section key={storyId} aria-label={story.storyKey ?? 'No story'}>
+                  <h3 className="tb-group-heading sticky top-8 z-10 flex h-8 items-center gap-2 border-b px-2.5 text-2xs font-semibold uppercase tracking-[0.12em] text-subtle-foreground backdrop-blur-sm">
+                    <Icon name="ListTodo" className="size-3" />
+                    <span className="truncate">
+                      {story.storyKey
+                        ? `${story.storyKey}${story.storySummary ? ` · ${story.storySummary}` : ''}`
+                        : 'No story'}
+                    </span>
+                    <span className="tb-count-chip ml-auto rounded-full px-1.5 py-0.5 text-xs font-normal tabular-nums">
+                      {story.items.length}
+                    </span>
+                  </h3>
+                  <ListStateGroups
+                    items={story.items}
+                    statusOrder={statusOrder}
+                    projectsById={projectsById}
+                    showProject={false}
+                    idPrefix={storyId}
+                    nested
+                    collapsedGroups={collapsedGroups}
+                    searchActive={searchActive}
+                    onToggleGroup={onToggleGroup}
+                    onMove={onMove}
+                    onOpen={onOpen}
+                  />
+                </section>
+              );
+            })}
+          </section>
+        );
+      })}
+    </>
+  );
+}
+
 function ListStateGroups({
   items,
   statusOrder,
@@ -4644,18 +4801,32 @@ function TrackerList({
             </ListMeasure>
           ) : (
             <ListMeasure>
-              <ListStateGroups
-                items={visibleItems}
-                statusOrder={boardSettings.statusOrder}
-                projectsById={projectsById}
-                showProject={false}
-                idPrefix={projectId ?? 'selected-project'}
-                collapsedGroups={collapsedGroups}
-                searchActive={committedQuery.trim() !== ''}
-                onToggleGroup={toggleGroup}
-                onMove={moveItemStatus}
-                onOpen={onOpen}
-              />
+              {visibleItems.some(item => item.epicKey || item.storyKey) ? (
+                <EpicStoryGroups
+                  items={visibleItems}
+                  statusOrder={boardSettings.statusOrder}
+                  projectsById={projectsById}
+                  idPrefix={projectId ?? 'selected-project'}
+                  collapsedGroups={collapsedGroups}
+                  searchActive={committedQuery.trim() !== ''}
+                  onToggleGroup={toggleGroup}
+                  onMove={moveItemStatus}
+                  onOpen={onOpen}
+                />
+              ) : (
+                <ListStateGroups
+                  items={visibleItems}
+                  statusOrder={boardSettings.statusOrder}
+                  projectsById={projectsById}
+                  showProject={false}
+                  idPrefix={projectId ?? 'selected-project'}
+                  collapsedGroups={collapsedGroups}
+                  searchActive={committedQuery.trim() !== ''}
+                  onToggleGroup={toggleGroup}
+                  onMove={moveItemStatus}
+                  onOpen={onOpen}
+                />
+              )}
             </ListMeasure>
           )}
         </div>
