@@ -3379,9 +3379,9 @@ function EpicStoryGroups({
           <section
             key={epicId}
             aria-label={epic.epicKey ?? 'No epic'}
-            className="border-b border-border last:border-b-0"
+            className="mb-4 rounded-lg border border-border last:mb-0"
           >
-            <h2 className="tb-project-strip sticky top-0 z-20 flex h-8 items-center gap-2 border-b px-2.5 text-xs font-semibold">
+            <h2 className="tb-project-strip flex h-9 items-center gap-2 rounded-t-lg border-b px-2.5 text-xs font-semibold">
               <Icon name="Layers" className="size-3.5 text-muted-foreground" />
               <span className="truncate">
                 {epic.epicKey
@@ -3397,8 +3397,12 @@ function EpicStoryGroups({
             {epic.stories.map(story => {
               const storyId = `${epicId}:${story.storyKey ?? 'no-story'}`;
               return (
-                <section key={storyId} aria-label={story.storyKey ?? 'No story'}>
-                  <h3 className="tb-group-heading sticky top-8 z-10 flex h-8 items-center gap-2 border-b px-2.5 text-2xs font-semibold uppercase tracking-[0.12em] text-subtle-foreground backdrop-blur-sm">
+                <section
+                  key={storyId}
+                  aria-label={story.storyKey ?? 'No story'}
+                  className="border-b border-border-hairline pl-4 last:border-b-0"
+                >
+                  <h3 className="tb-group-heading flex h-8 items-center gap-2 px-2.5 text-2xs font-semibold uppercase tracking-[0.12em] text-subtle-foreground">
                     <Icon name="ListTodo" className="size-3" />
                     <span className="truncate">
                       {story.storyKey
@@ -3409,19 +3413,21 @@ function EpicStoryGroups({
                       {story.items.length}
                     </span>
                   </h3>
-                  <ListStateGroups
-                    items={story.items}
-                    statusOrder={statusOrder}
-                    projectsById={projectsById}
-                    showProject={false}
-                    idPrefix={storyId}
-                    nested
-                    collapsedGroups={collapsedGroups}
-                    searchActive={searchActive}
-                    onToggleGroup={onToggleGroup}
-                    onMove={onMove}
-                    onOpen={onOpen}
-                  />
+                  <div className="pl-4">
+                    <ListStateGroups
+                      items={story.items}
+                      statusOrder={statusOrder}
+                      projectsById={projectsById}
+                      showProject={false}
+                      idPrefix={storyId}
+                      nested
+                      collapsedGroups={collapsedGroups}
+                      searchActive={searchActive}
+                      onToggleGroup={onToggleGroup}
+                      onMove={onMove}
+                      onOpen={onOpen}
+                    />
+                  </div>
                 </section>
               );
             })}
@@ -3714,6 +3720,14 @@ function KanbanCard({
           {item.key}
         </span>
       </span>
+      {item.epicKey || item.storyKey ? (
+        <span className="mt-1 flex min-w-0 items-center gap-1 truncate text-2xs text-muted-foreground">
+          <Icon name="Layers" className="size-3 shrink-0" />
+          <span className="truncate">
+            {[item.epicKey, item.storyKey].filter(Boolean).join(' › ')}
+          </span>
+        </span>
+      ) : null}
       <span className="mt-1.5 flex items-start gap-1.5">
         <span className="mt-1 flex shrink-0">
           <WorkStateGlyph category={item.stateCategory} />
@@ -4002,11 +4016,21 @@ function KanbanBoard({
           className="ml-0 mr-auto flex min-h-full min-w-max flex-row gap-2.5"
         >
           {lanes.map(lane => {
-            const columnItems = items.filter(
-              item =>
-                workflowStatusLaneKey(item.status, item.stateCategory) ===
-                lane.key
-            );
+            const columnItems = items
+              .filter(
+                item =>
+                  workflowStatusLaneKey(item.status, item.stateCategory) ===
+                  lane.key
+              )
+              .slice()
+              .sort((a, b) => {
+                const ae = a.epicExpectedStart ?? a.epicKey ?? '\uffff';
+                const be = b.epicExpectedStart ?? b.epicKey ?? '\uffff';
+                if (ae !== be) return ae.localeCompare(be);
+                const as = a.storyKey ?? '\uffff';
+                const bs = b.storyKey ?? '\uffff';
+                return as.localeCompare(bs);
+              });
             const option = optionForLane(lane.key);
             const dropState = pickup
               ? pickup.options.length === 0
