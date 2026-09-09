@@ -170,6 +170,11 @@ export const OFFICIAL_PLUGINS = [
     defaultEnabled: true,
   },
   {
+    name: "taskboard",
+    pluginId: "taskboard",
+    defaultEnabled: true,
+  },
+  {
     name: "theme-preview",
     pluginId: "theme-preview",
     defaultEnabled: true,
