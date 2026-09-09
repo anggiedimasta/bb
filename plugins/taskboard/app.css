@@ -149,6 +149,31 @@
     overflow-wrap: anywhere;
   }
 
+  .tb-epic-group {
+    background: var(--canvas);
+  }
+
+  .tb-epic-group .tb-epic-head {
+    background: var(--surface-recessed-soft-solid);
+    color: var(--tb-ink-soft);
+    border-color: var(--tb-border);
+  }
+
+  .tb-epic-group .tb-story-group,
+  .tb-epic-group .tb-story-head,
+  .tb-epic-group .tb-story-body {
+    background: var(--canvas);
+    border-color: var(--tb-border);
+  }
+
+  .tb-epic-group .tb-story-head {
+    color: var(--tb-ink-soft);
+  }
+
+  .tb-epic-group .tb-group-heading {
+    background: var(--canvas);
+  }
+
   .tb-search-shell {
     background: color-mix(in oklch, var(--canvas) 99.1%, var(--ink) 0.9%);
   }

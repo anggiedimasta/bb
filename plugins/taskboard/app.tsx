@@ -3391,9 +3391,9 @@ function EpicStoryGroups({
           <section
             key={epicId}
             aria-label={epic.epicKey ?? 'No epic'}
-            className="mb-4 rounded-lg border border-border last:mb-0"
+            className="tb-epic-group mb-4 overflow-hidden rounded-lg border border-border last:mb-0"
           >
-            <h2 className="tb-project-strip flex h-9 items-center gap-2 rounded-t-lg border-b px-2.5 text-xs font-semibold">
+            <h2 className="tb-epic-head flex h-9 items-center gap-2 border-b px-2.5 text-xs font-semibold">
               <Icon name="Layers" className="size-3.5 text-muted-foreground" />
               <span className="truncate">
                 {epic.epicKey
@@ -3412,9 +3412,9 @@ function EpicStoryGroups({
                 <section
                   key={storyId}
                   aria-label={story.storyKey ?? 'No story'}
-                  className="border-b border-border-hairline pl-4 last:border-b-0"
+                  className="tb-story-group border-b border-border-hairline pl-4 last:border-b-0"
                 >
-                  <h3 className="tb-group-heading flex h-8 items-center gap-2 px-2.5 text-2xs font-semibold uppercase tracking-[0.12em] text-subtle-foreground">
+                  <h3 className="tb-story-head flex h-8 items-center gap-2 px-2.5 text-2xs font-semibold uppercase tracking-[0.12em] text-subtle-foreground">
                     <Icon name="ListTodo" className="size-3" />
                     <span className="truncate">
                       {story.storyKey
@@ -3425,7 +3425,7 @@ function EpicStoryGroups({
                       {story.items.length}
                     </span>
                   </h3>
-                  <div className="pl-4">
+                  <div className="tb-story-body pl-4">
                     <ListStateGroups
                       items={story.items}
                       statusOrder={statusOrder}
