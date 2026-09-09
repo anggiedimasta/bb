@@ -241,6 +241,25 @@ export const KNOWN_ACP_AGENTS: readonly AcpAgentDefinition[] = [
       env: {},
     },
   },
+  {
+    id: "acp-antigravity",
+    displayName: "Google Antigravity",
+    icon: declaredIcon("antigravity"),
+    iconTint: { light: "#4285F4", dark: "#8AB4F8" },
+    signInCommand: "agy",
+    installUrl: "https://antigravity.google/docs/ide/extensions/zed",
+    visibility: "installed",
+    dialect: "antigravity",
+    providerUsage: true,
+    fork: "none",
+    reasoningLevels: ["low", "medium", "high", "xhigh", "max"],
+    launch: {
+      displayName: "Google Antigravity",
+      command: "agy_acp_server.par",
+      args: [],
+      env: {},
+    },
+  },
 ];
 
 export const RESERVED_ACP_PROVIDER_IDS: ReadonlySet<string> = new Set(

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ANTIGRAVITY_ACP_DIALECT,
   CURSOR_ACP_DIALECT,
   GENERIC_ACP_DIALECT,
   GROK_ACP_DIALECT,
@@ -24,6 +25,9 @@ describe("resolveAcpDialect", () => {
     expect(resolveAcpDialect({ dialectId: "opencode", command: "node" })).toBe(
       OPENCODE_ACP_DIALECT,
     );
+    expect(
+      resolveAcpDialect({ dialectId: "antigravity", command: "node" }),
+    ).toBe(ANTIGRAVITY_ACP_DIALECT);
   });
 
   it("falls back to the launch executable's base name", () => {
@@ -43,6 +47,9 @@ describe("resolveAcpDialect", () => {
     expect(resolveAcpDialect({ command: "/usr/local/bin/opencode" })).toBe(
       OPENCODE_ACP_DIALECT,
     );
+    expect(
+      resolveAcpDialect({ command: "/usr/local/bin/agy_acp_server.par" }),
+    ).toBe(ANTIGRAVITY_ACP_DIALECT);
   });
 
   it("is generic for a dialect id it does not ship", () => {

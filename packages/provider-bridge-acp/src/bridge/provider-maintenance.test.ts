@@ -124,6 +124,104 @@ describe("ACP provider maintenance", () => {
     });
   });
 
+  it("normalizes Antigravity quota-summary groups into remaining-based windows", () => {
+    expect(
+      __testing.normalizeAntigravityUsage({
+        response: {
+          groups: [
+            {
+              displayName: "Gemini Models",
+              buckets: [
+                {
+                  bucketId: "gemini-weekly",
+                  displayName: "Weekly Limit Remaining",
+                  window: "weekly",
+                  remainingFraction: 0.11264957,
+                  resetTime: "2026-09-11T02:41:41Z",
+                },
+                {
+                  bucketId: "gemini-5h",
+                  displayName: "Five Hour Limit Remaining",
+                  window: "5h",
+                  remainingFraction: 0.0364187,
+                  resetTime: "2026-09-09T07:43:55Z",
+                },
+              ],
+            },
+            {
+              displayName: "Claude and GPT models",
+              buckets: [
+                {
+                  bucketId: "3p-weekly",
+                  window: "weekly",
+                  remainingFraction: 0.68260735,
+                  resetTime: "2026-09-15T18:35:06Z",
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    ).toEqual({
+      status: "ok",
+      accountEmail: null,
+      planLabel: null,
+      windows: [
+        {
+          label: "Gemini Models · Weekly",
+          usedPercent: 89,
+          resetsAt: "2026-09-11T02:41:41Z",
+        },
+        {
+          label: "Gemini Models · 5-hour",
+          usedPercent: 96,
+          resetsAt: "2026-09-09T07:43:55Z",
+        },
+        {
+          label: "Claude and GPT models · Weekly",
+          usedPercent: 32,
+          resetsAt: "2026-09-15T18:35:06Z",
+        },
+      ],
+    });
+  });
+
+  it("skips Antigravity buckets that carry reset prose but no remaining fraction", () => {
+    expect(
+      __testing.normalizeAntigravityUsage({
+        response: {
+          groups: [
+            {
+              displayName: "Gemini Models",
+              buckets: [
+                {
+                  bucketId: "gemini-5h",
+                  description: "Refreshes in 51 minutes.",
+                  window: "5h",
+                  resetTime: "2026-09-09T07:43:55Z",
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    ).toEqual({
+      status: "ok",
+      accountEmail: null,
+      planLabel: null,
+      windows: [],
+    });
+  });
+
+  it("reports an error when the Antigravity usage response is malformed", () => {
+    expect(__testing.normalizeAntigravityUsage({ response: "nope" })).toEqual({
+      status: "error",
+      message: "Antigravity usage response was malformed.",
+      planLabel: null,
+      accountEmail: null,
+    });
+  });
+
   it("offers the installer only through a fresh matching action", () => {
     expect(
       __testing.buildProviderInstallationRun(

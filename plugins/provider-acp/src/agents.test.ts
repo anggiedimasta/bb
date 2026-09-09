@@ -248,6 +248,18 @@ describe("acpProviderDeclaration", () => {
       acpDialect: "kiro",
     });
     expect(byId.get("acp-kiro")?.maintenance?.usage).toBe(true);
+    expect(byId.get("acp-antigravity")?.experimental_bridgeOptions).toMatchObject(
+      {
+        acpDialect: "antigravity",
+        acpLaunchSpec: {
+          command: "agy_acp_server.par",
+        },
+      },
+    );
+    expect(byId.get("acp-antigravity")?.maintenance?.usage).toBe(true);
+    expect(byId.get("acp-antigravity")?.experimental_visibility).toBe(
+      "installed",
+    );
     expect(
       byId.get("acp-opencode")?.capabilities.supportsManualCompaction,
     ).toBe(true);

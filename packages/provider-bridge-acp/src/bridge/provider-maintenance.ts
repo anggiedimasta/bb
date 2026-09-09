@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
+import https from "node:https";
 import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -35,6 +36,13 @@ const KIRO_DEFAULT_REGION = "us-east-1";
 const KIRO_USAGE_TARGET = "AmazonCodeWhispererService.GetUsageLimits";
 const KIRO_TOKEN_KEY = "kirocli:odic:token";
 const KIRO_PROFILE_STATE_KEY = "api.codewhisperer.profile";
+
+const ANTIGRAVITY_LOGIN_COMMAND = "agy";
+const ANTIGRAVITY_INSTALL_URL =
+  "https://antigravity.google/docs/ide/extensions/zed";
+const ANTIGRAVITY_QUOTA_METHOD =
+  "exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary";
+const ANTIGRAVITY_PROBE_TIMEOUT_MS = 8_000;
 
 function cursorAuthFilePath(): string {
   if (process.platform === "win32") {
@@ -710,8 +718,279 @@ export const KIRO_ACP_MAINTENANCE: AcpMaintenanceDialect = {
   readUsage: readKiroUsage,
 };
 
+interface AntigravityLanguageServer {
+  csrfToken: string;
+  ports: number[];
+}
+
+async function listAntigravityLanguageServers(): Promise<
+  AntigravityLanguageServer[]
+> {
+  let stdout: string;
+  try {
+    ({ stdout } = await execFileAsync("ps", ["-ax", "-o", "pid=,command="], {
+      timeout: 10_000,
+      maxBuffer: 8 * 1024 * 1024,
+    }));
+  } catch {
+    return [];
+  }
+  const servers: AntigravityLanguageServer[] = [];
+  for (const line of stdout.split("\n")) {
+    if (!line.includes("language_server")) continue;
+    if (!/(antigravity|--app_data_dir antigravity)/u.test(line)) continue;
+    const pidMatch = /^\s*(\d+)\s+(.*)$/u.exec(line);
+    if (pidMatch === null) continue;
+    const pid = Number(pidMatch[1]);
+    const command = pidMatch[2] ?? "";
+    const csrf = /--csrf_token\s+(\S+)/u.exec(command);
+    if (csrf === null) continue;
+    const ports = await listListeningPorts(pid);
+    if (ports.length === 0) continue;
+    servers.push({ csrfToken: csrf[1] ?? "", ports });
+  }
+  return servers;
+}
+
+async function listListeningPorts(pid: number): Promise<number[]> {
+  if (process.platform === "darwin" || process.platform === "linux") {
+    try {
+      const { stdout } = await execFileAsync(
+        "lsof",
+        ["-nP", "-iTCP", "-sTCP:LISTEN", "-a", "-p", String(pid)],
+        { timeout: 8_000, maxBuffer: 4 * 1024 * 1024 },
+      );
+      const ports = new Set<number>();
+      for (const match of stdout.matchAll(/:(\d+)\s+\(LISTEN\)/gu)) {
+        const port = Number(match[1]);
+        if (Number.isInteger(port)) ports.add(port);
+      }
+      if (ports.size > 0) return [...ports];
+    } catch {
+      // fall through to /proc on Linux
+    }
+  }
+  if (process.platform === "linux") {
+    return listListeningPortsFromProc(pid);
+  }
+  return [];
+}
+
+async function listListeningPortsFromProc(pid: number): Promise<number[]> {
+  try {
+    const fdDir = `/proc/${pid}/fd`;
+    const entries = await fs.readdir(fdDir);
+    const inodes = new Set<string>();
+    for (const entry of entries) {
+      try {
+        const link = await fs.readlink(path.join(fdDir, entry));
+        const socket = /^socket:\[(\d+)\]$/u.exec(link);
+        if (socket !== null) inodes.add(socket[1] ?? "");
+      } catch {
+        // ignore unreadable fds
+      }
+    }
+    if (inodes.size === 0) return [];
+    const ports = new Set<number>();
+    for (const table of ["tcp", "tcp6"]) {
+      let content: string;
+      try {
+        content = await fs.readFile(`/proc/${pid}/net/${table}`, "utf8");
+      } catch {
+        continue;
+      }
+      for (const row of content.split("\n").slice(1)) {
+        const columns = row.trim().split(/\s+/u);
+        const local = columns[1];
+        const state = columns[3];
+        const inode = columns[9];
+        if (local === undefined || state !== "0A" || inode === undefined) {
+          continue;
+        }
+        if (!inodes.has(inode)) continue;
+        const hexPort = local.split(":")[1];
+        if (hexPort === undefined) continue;
+        const port = Number.parseInt(hexPort, 16);
+        if (Number.isInteger(port)) ports.add(port);
+      }
+    }
+    return [...ports];
+  } catch {
+    return [];
+  }
+}
+
+function probeAntigravityQuota(
+  port: number,
+  csrfToken: string,
+): Promise<{ status: number; body: string } | null> {
+  return new Promise((resolve) => {
+    const request = https.request(
+      {
+        host: "127.0.0.1",
+        port,
+        method: "POST",
+        path: `/${ANTIGRAVITY_QUOTA_METHOD}`,
+        // The language server binds a self-signed loopback cert; TLS
+        // verification is disabled only for 127.0.0.1.
+        rejectUnauthorized: false,
+        headers: {
+          "X-Codeium-Csrf-Token": csrfToken,
+          "Connect-Protocol-Version": "1",
+          "Content-Type": "application/json",
+        },
+        timeout: ANTIGRAVITY_PROBE_TIMEOUT_MS,
+      },
+      (response) => {
+        const chunks: Buffer[] = [];
+        response.on("data", (chunk: Buffer) => chunks.push(chunk));
+        response.on("end", () =>
+          resolve({
+            status: response.statusCode ?? 0,
+            body: Buffer.concat(chunks).toString("utf8"),
+          }),
+        );
+      },
+    );
+    request.on("error", () => resolve(null));
+    request.on("timeout", () => {
+      request.destroy();
+      resolve(null);
+    });
+    request.end("{}");
+  });
+}
+
+const antigravityBucketSchema = z
+  .object({
+    bucketId: z.string().min(1).nullish(),
+    displayName: z.string().min(1).nullish(),
+    description: z.string().min(1).nullish(),
+    remainingFraction: z.number().nullish(),
+    resetTime: z.string().min(1).nullish(),
+  })
+  .passthrough();
+
+const antigravityQuotaResponseSchema = z
+  .object({
+    response: z
+      .object({
+        groups: z
+          .array(
+            z
+              .object({
+                displayName: z.string().min(1).nullish(),
+                buckets: z.array(antigravityBucketSchema).default([]),
+              })
+              .passthrough(),
+          )
+          .default([]),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+
+function antigravityWindowLabel(
+  groupName: string | null | undefined,
+  bucket: z.infer<typeof antigravityBucketSchema>,
+): string {
+  const group = groupName ?? "Antigravity";
+  const cadence =
+    bucket.bucketId != null && /weekly/u.test(bucket.bucketId)
+      ? "Weekly"
+      : bucket.bucketId != null && /5h/u.test(bucket.bucketId)
+        ? "5-hour"
+        : (bucket.displayName ?? "Limit");
+  return `${group} · ${cadence}`;
+}
+
+function normalizeAntigravityUsage(raw: unknown): ProviderUsage {
+  const parsed = antigravityQuotaResponseSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      status: "error",
+      message: "Antigravity usage response was malformed.",
+      planLabel: null,
+      accountEmail: null,
+    };
+  }
+  const windows: ProviderUsageWindow[] = [];
+  for (const group of parsed.data.response.groups) {
+    for (const bucket of group.buckets) {
+      // Buckets without a remaining fraction only carry reset prose; the PoC
+      // marks these usageKnown:false. Skip them so we never render a fake bar.
+      if (
+        bucket.remainingFraction == null ||
+        !Number.isFinite(bucket.remainingFraction)
+      ) {
+        continue;
+      }
+      windows.push({
+        label: antigravityWindowLabel(group.displayName, bucket),
+        usedPercent: clampPercent((1 - bucket.remainingFraction) * 100),
+        resetsAt: bucket.resetTime ?? null,
+      });
+    }
+  }
+  return {
+    status: "ok",
+    accountEmail: null,
+    planLabel: null,
+    windows,
+  };
+}
+
+async function readAntigravityUsage(): Promise<ProviderUsageResult> {
+  const servers = await listAntigravityLanguageServers();
+  if (servers.length === 0) {
+    return { supported: true, usage: { status: "unauthenticated" } };
+  }
+  let lastError: string | null = null;
+  for (const server of servers) {
+    for (const port of server.ports) {
+      const result = await probeAntigravityQuota(port, server.csrfToken);
+      if (result === null) continue;
+      if (result.status !== 200) {
+        lastError = `Antigravity usage request failed (HTTP ${result.status}).`;
+        continue;
+      }
+      try {
+        return {
+          supported: true,
+          usage: normalizeAntigravityUsage(JSON.parse(result.body)),
+        };
+      } catch {
+        lastError = "Antigravity usage response was not valid JSON.";
+      }
+    }
+  }
+  if (lastError !== null) {
+    return {
+      supported: true,
+      usage: {
+        status: "error",
+        message: lastError,
+        planLabel: null,
+        accountEmail: null,
+      },
+    };
+  }
+  return { supported: true, usage: { status: "unauthenticated" } };
+}
+
+export const ANTIGRAVITY_ACP_MAINTENANCE: AcpMaintenanceDialect = {
+  loginCommand: ANTIGRAVITY_LOGIN_COMMAND,
+  installer: () => downloadedInstallerCommand(ANTIGRAVITY_INSTALL_URL),
+  readAccount: async () => {
+    const servers = await listAntigravityLanguageServers();
+    return servers.length === 0 ? null : { email: null };
+  },
+  readUsage: readAntigravityUsage,
+};
+
 export const __testing = {
   buildProviderInstallationRun: buildAcpProviderInstallationRun,
   normalizeUsage,
   normalizeKiroUsage,
+  normalizeAntigravityUsage,
 };

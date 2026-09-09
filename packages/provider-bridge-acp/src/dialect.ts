@@ -2,6 +2,7 @@ import type { DeltaItemShape } from "@bb/provider-bridge-protocol";
 import { basename } from "node:path";
 import { z } from "zod";
 import {
+  ANTIGRAVITY_ACP_MAINTENANCE,
   CURSOR_ACP_MAINTENANCE,
   KIRO_ACP_MAINTENANCE,
   type AcpMaintenanceDialect,
@@ -201,6 +202,11 @@ export const KIRO_ACP_DIALECT: AcpDialect = {
   maintenance: KIRO_ACP_MAINTENANCE,
 };
 
+export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
+  id: "antigravity",
+  maintenance: ANTIGRAVITY_ACP_MAINTENANCE,
+};
+
 const ompBashRawInputSchema = z
   .object({
     command: z.string(),
@@ -385,6 +391,7 @@ export const OPENCODE_ACP_DIALECT: AcpDialect = {
 const DIALECTS_BY_ID: ReadonlyMap<string, AcpDialect> = new Map([
   [CURSOR_ACP_DIALECT.id, CURSOR_ACP_DIALECT],
   [KIRO_ACP_DIALECT.id, KIRO_ACP_DIALECT],
+  [ANTIGRAVITY_ACP_DIALECT.id, ANTIGRAVITY_ACP_DIALECT],
   [GROK_ACP_DIALECT.id, GROK_ACP_DIALECT],
   [OMP_ACP_DIALECT.id, OMP_ACP_DIALECT],
   [OPENCODE_ACP_DIALECT.id, OPENCODE_ACP_DIALECT],
@@ -393,6 +400,7 @@ const DIALECTS_BY_ID: ReadonlyMap<string, AcpDialect> = new Map([
 const DIALECT_IDS_BY_COMMAND: Readonly<Record<string, string>> = {
   "cursor-agent": CURSOR_ACP_DIALECT.id,
   "kiro-cli": KIRO_ACP_DIALECT.id,
+  "agy_acp_server.par": ANTIGRAVITY_ACP_DIALECT.id,
   grok: GROK_ACP_DIALECT.id,
   omp: OMP_ACP_DIALECT.id,
   opencode: OPENCODE_ACP_DIALECT.id,
