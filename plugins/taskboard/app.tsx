@@ -3681,6 +3681,7 @@ function KanbanCard({
   pickedUp,
   pending,
   moveDisabled,
+  readOnly = false,
   onOpen,
   onPrepare,
   onDragStart,
@@ -3691,6 +3692,7 @@ function KanbanCard({
   pickedUp: boolean;
   pending: boolean;
   moveDisabled: boolean;
+  readOnly?: boolean;
   onOpen: () => void;
   onPrepare: () => void;
   onDragStart: (event: ReactDragEvent<HTMLButtonElement>) => void;
@@ -3707,20 +3709,21 @@ function KanbanCard({
   return (
     <button
       type="button"
-      draggable={!pending && !moveDisabled}
-      aria-grabbed={pickedUp}
+      draggable={!readOnly && !pending && !moveDisabled}
+      aria-grabbed={readOnly ? undefined : pickedUp}
       aria-busy={pending}
-      aria-label={`${item.key}: ${item.title}. Status ${item.status}.${priority ? ` Priority ${priority}.` : ''}${assignee ? ` Assigned to ${assignee}.` : ''}${moveDisabled ? ' Workflow statuses are loading. Press Enter to open.' : ' Press Space to move, or Enter to open.'}`}
+      aria-label={`${item.key}: ${item.title}. Status ${item.status}.${priority ? ` Priority ${priority}.` : ''}${assignee ? ` Assigned to ${assignee}.` : ''}${readOnly ? ' Press Enter to open.' : moveDisabled ? ' Workflow statuses are loading. Press Enter to open.' : ' Press Space to move, or Enter to open.'}`}
       data-state-category={item.stateCategory}
       data-status-tone={workflowStatusTone(item.status, item.stateCategory)}
       data-picked-up={pickedUp ? 'true' : 'false'}
       data-pending={pending ? 'true' : 'false'}
       data-move-disabled={moveDisabled ? 'true' : 'false'}
-      onPointerDown={onPrepare}
-      onFocus={onPrepare}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      onKeyDown={onKeyDown}
+      data-read-only={readOnly ? 'true' : 'false'}
+      onPointerDown={readOnly ? undefined : onPrepare}
+      onFocus={readOnly ? undefined : onPrepare}
+      onDragStart={readOnly ? undefined : onDragStart}
+      onDragEnd={readOnly ? undefined : onDragEnd}
+      onKeyDown={readOnly ? undefined : onKeyDown}
       onClick={onOpen}
       className="tb-kanban-card group w-full rounded-md px-3 py-2.5 text-left transition-[border-color,background-color,opacity,transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
@@ -3782,13 +3785,15 @@ function KanbanBoard({
   workflowItems,
   statusOrder,
   onOpen,
-  onMove
+  onMove,
+  readOnly = false
 }: {
   items: readonly WorkItem[];
   workflowItems: readonly WorkItem[];
   statusOrder: readonly string[];
   onOpen: (item: WorkItem) => void;
   onMove: (item: WorkItem, option: WorkStatusOption) => Promise<void>;
+  readOnly?: boolean;
 }) {
   const rpc = useRpc<TaskboardRpcContract>();
   const optionsRef = useRef(
@@ -4112,6 +4117,7 @@ function KanbanBoard({
                         <KanbanCard
                           key={itemId}
                           item={item}
+                          readOnly={readOnly}
                           pickedUp={
                             pickup
                               ? kanbanItemId(pickup.item) === itemId
@@ -4791,6 +4797,10 @@ function TrackerList({
               statusOrder={boardSettings.statusOrder}
               onOpen={onOpen}
               onMove={moveItemStatus}
+              readOnly={
+                visibleItems.length > 0 &&
+                visibleItems.every(item => item.source === 'jira')
+              }
             />
           ) : visibleItems.length === 0 ? (
             <ListMeasure className="h-full">
