@@ -32,6 +32,7 @@ import { ThreadProviderContext } from "@/components/thread/thread-provider-conte
 import {
   defaultAppSettings,
   resolveEnvironmentMergeBaseBranch,
+  type PromptMentionResource,
   type ThreadListEntry,
   type ThreadWithRuntime,
 } from "@bb/domain";
@@ -1201,7 +1202,10 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
   const handleSelectionAddToChat = useCallback(
     (
       text: string,
-      attachmentsOrRange?: readonly PromptDraftAttachment[] | { start: number; end: number },
+      attachmentsOrRange?:
+        | readonly PromptDraftAttachment[]
+        | { start: number; end: number },
+      filePath?: string,
     ) => {
       dismissCompactKeyboard();
       if (
@@ -1209,13 +1213,47 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
         !Array.isArray(attachmentsOrRange) &&
         "start" in attachmentsOrRange
       ) {
-        addQuoteToComposer(text);
+        const range = attachmentsOrRange;
+        let targetPath = filePath;
+        if (!targetPath) {
+          const firstLine = text.split("\n")[0] ?? "";
+          const colonMatch = firstLine.match(/^([^:\s]+):(\d+)(?:-(\d+))?$/);
+          if (colonMatch && colonMatch[1]) {
+            targetPath = colonMatch[1];
+          }
+        }
+        if (targetPath) {
+          const startLineNumber = Math.min(range.start, range.end);
+          const endLineNumber = Math.max(range.start, range.end);
+          const fileName = targetPath.split(/[\\/]/).pop() ?? targetPath;
+          const lineRangeLabel =
+            startLineNumber === endLineNumber
+              ? `:${startLineNumber}`
+              : `:${startLineNumber}-${endLineNumber}`;
+
+          const resource: PromptMentionResource = {
+            kind: "path",
+            entryKind: "file",
+            path: targetPath,
+            label: `${fileName}${lineRangeLabel}`,
+            source: "workspace",
+            lineRange: {
+              startLineNumber,
+              endLineNumber,
+            },
+          };
+          selectionPromptDraft.addMention(resource);
+        } else {
+          addQuoteToComposer(text);
+        }
+      } else if (Array.isArray(attachmentsOrRange)) {
+        addQuoteToComposer(text, attachmentsOrRange);
       } else {
-        addQuoteToComposer(text, attachmentsOrRange as readonly PromptDraftAttachment[] | undefined);
+        addQuoteToComposer(text);
       }
       setComposerFocusRequestNonce((nonce) => nonce + 1);
     },
-    [addQuoteToComposer, dismissCompactKeyboard],
+    [addQuoteToComposer, dismissCompactKeyboard, selectionPromptDraft],
   );
   const sendSideChatMessageToMain =
     useCallback<ThreadTimelineSendToMainMessageHandler>(

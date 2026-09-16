@@ -26,7 +26,16 @@ export interface BbSourceCodeProps extends SourceCodePresentation {
   cacheKey?: string;
   className?: string;
   scrollToHighlightedLines?: boolean;
-  onSelectionAddToChat?: ((text: string) => void) | ((text: string, range?: { start: number; end: number }) => void);
+  onSelectionAddToChat?: (
+    text: string,
+    range?: { start: number; end: number },
+    filePath?: string,
+  ) => void;
+  onSelectionAddToSideChat?: (
+    text: string,
+    range?: { start: number; end: number },
+    filePath?: string,
+  ) => void;
 }
 
 export interface BbDiffProps extends DiffPresentation {
@@ -34,5 +43,14 @@ export interface BbDiffProps extends DiffPresentation {
   patchText?: string;
   fullFileContents: ExperimentalDiffFullFileContents | null;
   className?: string;
-  onSelectionAddToChat?: (text: string) => void;
+  onSelectionAddToChat?: (
+    text: string,
+    range?: { start: number; end: number },
+    filePath?: string,
+  ) => void;
+  onSelectionAddToSideChat?: (
+    text: string,
+    range?: { start: number; end: number },
+    filePath?: string,
+  ) => void;
 }

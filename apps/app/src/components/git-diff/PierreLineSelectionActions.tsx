@@ -11,6 +11,7 @@ import {
 import type { SelectedLineRange } from "@pierre/diffs";
 import {
   anchorPointFromMouseEvent,
+  firstClientRect,
   selectionAnchorFromPointerRelease,
   type MessageProseSelection,
   type SelectionAnchor,
@@ -32,9 +33,19 @@ interface UsePierreLineSelectionActionsArgs {
   }) => string | null;
   buildSelectionText: (range: SelectedLineRange) => string | null;
   containerRef: RefObject<HTMLElement | null>;
+  content?: string;
   enabled: boolean;
-  onSelectionAddToChat?: (text: string, range?: SelectedLineRange) => void;
-  onSelectionAddToSideChat?: (text: string, range?: SelectedLineRange) => void;
+  filePath?: string;
+  onSelectionAddToChat?: (
+    text: string,
+    range?: SelectedLineRange,
+    filePath?: string,
+  ) => void;
+  onSelectionAddToSideChat?: (
+    text: string,
+    range?: SelectedLineRange,
+    filePath?: string,
+  ) => void;
 }
 
 export interface PierreLineSelectionActions {
@@ -42,9 +53,7 @@ export interface PierreLineSelectionActions {
   onLineSelectionChange: (range: SelectedLineRange | null) => void;
   onLineSelectionEnd: (range: SelectedLineRange | null) => void;
   onLineSelectionStart: (range: SelectedLineRange | null) => void;
-  onGutterUtilityClick: (range: SelectedLineRange) => void;
   onPointerDownCapture: (event: ReactPointerEvent<HTMLElement>) => void;
-  onPointerMoveCapture: (event: ReactPointerEvent<HTMLElement>) => void;
   onPointerUpCapture: (event: ReactPointerEvent<HTMLElement>) => void;
   selectedRange: SelectedLineRange | null;
 }
@@ -81,25 +90,6 @@ function buildMenuSelection({
     anchorPoint,
     anchorSide: selectionAnchor.side,
   };
-}
-
-function isGutterUtilityPointerEvent(
-  event: ReactPointerEvent<HTMLElement>,
-): boolean {
-  return isGutterUtilityPath(event.nativeEvent.composedPath());
-}
-
-function isGutterUtilityPath(
-  path: readonly (EventTarget | undefined)[],
-): boolean {
-  return path.some(
-    (target) =>
-      target instanceof Element &&
-      (target.hasAttribute("data-utility-button") ||
-        target.hasAttribute("data-gutter-utility-slot") ||
-        target.getAttribute("slot") === "gutter-utility-slot" ||
-        target.getAttribute("name") === "gutter-utility-slot"),
-  );
 }
 
 function selectedLineAttributeMatchesSide(
@@ -146,14 +136,216 @@ function anchorPointFromSelectedLine(
   };
 }
 
+function getRoots(
+  containerElement: HTMLElement | null,
+): readonly (Document | ShadowRoot | HTMLElement)[] {
+  if (containerElement === null) {
+    return [];
+  }
+  const shadowRoots = getDiffShadowRoots(containerElement);
+  if (shadowRoots.length > 0) {
+    return shadowRoots;
+  }
+  return [containerElement];
+}
+
+function nodeContainsOrShadowContains(
+  container: HTMLElement,
+  target: Node | null,
+): boolean {
+  let curr: Node | null = target;
+  while (curr !== null) {
+    if (curr === container) {
+      return true;
+    }
+    curr = curr.parentNode ?? (curr instanceof ShadowRoot ? curr.host : null);
+  }
+  return false;
+}
+
+function getLineNumberFromNode(node: Node | null): number | null {
+  let curr: Node | null = node;
+  while (curr !== null) {
+    if (curr instanceof HTMLElement) {
+      const lineAttr = curr.getAttribute("data-line");
+      if (lineAttr !== null) {
+        const parsed = parseInt(lineAttr, 10);
+        if (!isNaN(parsed) && parsed > 0) {
+          return parsed;
+        }
+      }
+    }
+    curr = curr.parentNode ?? (curr instanceof ShadowRoot ? curr.host : null);
+  }
+  return null;
+}
+
+function resolveLineRangeFromDomSelection({
+  range,
+  content,
+  selectedText,
+}: {
+  range: Range;
+  content?: string;
+  selectedText: string;
+}): SelectedLineRange | null {
+  const startLine = getLineNumberFromNode(range.startContainer);
+  const endLine = getLineNumberFromNode(range.endContainer);
+
+  if (startLine !== null && endLine !== null) {
+    return {
+      start: Math.min(startLine, endLine),
+      end: Math.max(startLine, endLine),
+    };
+  }
+  if (startLine !== null) {
+    const lineCount = selectedText.split(/\r\n|\n|\r/).length;
+    return {
+      start: startLine,
+      end: startLine + Math.max(0, lineCount - 1),
+    };
+  }
+  if (endLine !== null) {
+    const lineCount = selectedText.split(/\r\n|\n|\r/).length;
+    return {
+      start: Math.max(1, endLine - Math.max(0, lineCount - 1)),
+      end: endLine,
+    };
+  }
+
+  if (content !== undefined && selectedText.trim().length > 0) {
+    const trimmed = selectedText.trim();
+    const index = content.indexOf(trimmed);
+    if (index !== -1) {
+      const linesBefore = content.slice(0, index).split(/\r\n|\n|\r/).length;
+      const linesCount = trimmed.split(/\r\n|\n|\r/).length;
+      return {
+        start: linesBefore,
+        end: linesBefore + linesCount - 1,
+      };
+    }
+    const firstLine = trimmed.split(/\r\n|\n|\r/)[0]?.trim();
+    if (firstLine !== undefined && firstLine.length > 3) {
+      const firstIndex = content.indexOf(firstLine);
+      if (firstIndex !== -1) {
+        const linesBefore = content.slice(0, firstIndex).split(/\r\n|\n|\r/).length;
+        const linesCount = trimmed.split(/\r\n|\n|\r/).length;
+        return {
+          start: linesBefore,
+          end: linesBefore + linesCount - 1,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+function readDomSelectionInContainer({
+  containerElement,
+  content,
+  anchor,
+}: {
+  containerElement: HTMLElement | null;
+  content?: string;
+  anchor: SelectionAnchor | null;
+}): {
+  selection: MessageProseSelection;
+  range: SelectedLineRange | null;
+} | null {
+  if (containerElement === null || typeof window === "undefined") {
+    return null;
+  }
+
+  let sel: Selection | null = null;
+  let domRange: Range | null = null;
+
+  const roots = getRoots(containerElement);
+  for (const root of roots) {
+    if (
+      "getSelection" in root &&
+      typeof (root as unknown as { getSelection?: () => Selection | null }).getSelection ===
+        "function"
+    ) {
+      const shadowSel = (
+        root as unknown as { getSelection: () => Selection | null }
+      ).getSelection();
+      if (shadowSel !== null && !shadowSel.isCollapsed && shadowSel.rangeCount > 0) {
+        sel = shadowSel;
+        domRange = shadowSel.getRangeAt(0);
+        break;
+      }
+    }
+  }
+
+  if (sel === null || domRange === null) {
+    const winSel = window.getSelection();
+    if (winSel !== null && !winSel.isCollapsed && winSel.rangeCount > 0) {
+      const testRange = winSel.getRangeAt(0);
+      if (
+        nodeContainsOrShadowContains(containerElement, testRange.commonAncestorContainer) ||
+        nodeContainsOrShadowContains(containerElement, winSel.anchorNode) ||
+        nodeContainsOrShadowContains(containerElement, winSel.focusNode)
+      ) {
+        sel = winSel;
+        domRange = testRange;
+      }
+    }
+  }
+
+  if (sel === null || domRange === null) {
+    return null;
+  }
+
+  const text = sel.toString().trim();
+  if (text.length === 0) {
+    return null;
+  }
+
+  const lineRange = resolveLineRangeFromDomSelection({
+    range: domRange,
+    content,
+    selectedText: text,
+  });
+
+  const rect = firstClientRect(domRange) ?? domRange.getBoundingClientRect();
+
+  const selectionAnchor =
+    anchor ??
+    (rect.width > 0 || rect.height > 0
+      ? {
+          point: {
+            x:
+              rect.left +
+              Math.min(LINE_SELECTION_MENU_INLINE_OFFSET_PX, rect.width / 2),
+            y: rect.top,
+          },
+          side: "top" as const,
+        }
+      : fallbackAnchorPoint(containerElement));
+
+  const selection: MessageProseSelection = {
+    text,
+    rect,
+    anchorPoint: selectionAnchor.point,
+    anchorSide: selectionAnchor.side,
+  };
+
+  return { selection, range: lineRange };
+}
+
 function resolveSelectedLineAnchorPoint({
   anchorSide,
   containerElement,
+  range,
 }: {
   anchorSide: SelectionAnchorSide;
   containerElement: HTMLElement | null;
+  range: SelectedLineRange;
 }): SelectionAnchorPoint | null {
-  for (const root of getDiffShadowRoots(containerElement)) {
+  const roots = getRoots(containerElement);
+
+  for (const root of roots) {
     const selectedLine = getBoundarySelectedLine(
       Array.from(
         root.querySelectorAll<HTMLElement>("[data-selected-line][data-line]"),
@@ -165,7 +357,7 @@ function resolveSelectedLineAnchorPoint({
     }
   }
 
-  for (const root of getDiffShadowRoots(containerElement)) {
+  for (const root of roots) {
     const selectedNumber = getBoundarySelectedLine(
       Array.from(
         root.querySelectorAll<HTMLElement>(
@@ -183,30 +375,32 @@ function resolveSelectedLineAnchorPoint({
     }
   }
 
-  return null;
-}
-
-function resolveUtilityButtonAnchorPoint({
-  anchorSide,
-  containerElement,
-}: {
-  anchorSide: SelectionAnchorSide;
-  containerElement: HTMLElement | null;
-}): SelectionAnchorPoint | null {
-  for (const root of getDiffShadowRoots(containerElement)) {
-    const utilityButton = root.querySelector("[data-utility-button]");
-    if (utilityButton === null) {
-      continue;
+  for (const root of roots) {
+    const anySelected = getBoundarySelectedLine(
+      Array.from(root.querySelectorAll<HTMLElement>("[data-selected-line]")),
+      anchorSide,
+    );
+    if (anySelected !== undefined) {
+      return anchorPointFromSelectedLine(anySelected, anchorSide);
     }
-    const rect = utilityButton.getBoundingClientRect();
-    if (rect.width === 0 && rect.height === 0) {
-      continue;
-    }
-    return {
-      x: rect.right + LINE_SELECTION_MENU_INLINE_OFFSET_PX,
-      y: anchorSide === "bottom" ? rect.bottom : rect.top,
-    };
   }
+
+  const targetLineNumber =
+    anchorSide === "bottom"
+      ? Math.max(range.start, range.end)
+      : Math.min(range.start, range.end);
+
+  for (const root of roots) {
+    const lines = Array.from(
+      root.querySelectorAll<HTMLElement>(`[data-line="${targetLineNumber}"]`),
+    );
+    const candidate =
+      lines.find((line) => line.dataset.lineIndex !== undefined) ?? lines[0];
+    if (candidate !== undefined) {
+      return anchorPointFromSelectedLine(candidate, anchorSide);
+    }
+  }
+
   return null;
 }
 
@@ -266,7 +460,9 @@ export function usePierreLineSelectionActions({
   buildFallbackSelectionText,
   buildSelectionText,
   containerRef,
+  content,
   enabled,
+  filePath,
   onSelectionAddToChat,
   onSelectionAddToSideChat,
 }: UsePierreLineSelectionActionsArgs): PierreLineSelectionActions {
@@ -279,9 +475,10 @@ export function usePierreLineSelectionActions({
   const [activeSelection, setActiveSelection] =
     useState<MessageProseSelection | null>(null);
   const pointerStartPointRef = useRef<SelectionAnchorPoint | null>(null);
+  const pointerStartedInContainerRef = useRef(false);
+  const pointerIsDownRef = useRef(false);
   const lastPointerReleaseAnchorRef = useRef<SelectionAnchor | null>(null);
   const lastLineSelectionAnchorRef = useRef<SelectionAnchor | null>(null);
-  const lastUtilityAnchorRef = useRef<SelectionAnchor | null>(null);
   const lineSelectionStartRangeRef = useRef<SelectedLineRange | null>(null);
   const currentLineRangeRef = useRef<SelectedLineRange | null>(null);
   const suppressedSelectionEndRangeRef = useRef<SelectedLineRange | null>(null);
@@ -292,36 +489,11 @@ export function usePierreLineSelectionActions({
         return;
       }
       const point = anchorPointFromMouseEvent(event);
-      if (isGutterUtilityPointerEvent(event)) {
-        lastUtilityAnchorRef.current =
-          point === null
-            ? null
-            : {
-                point,
-                side: lastLineSelectionAnchorRef.current?.side ?? "top",
-              };
-        return;
-      }
       documentPointerReleaseAnchor = null;
       pointerStartPointRef.current = point;
       documentPointerStartPoint = point;
-    },
-    [enabled],
-  );
-
-  const handlePointerMoveCapture = useCallback(
-    (event: ReactPointerEvent<HTMLElement>) => {
-      if (!enabled || !isGutterUtilityPointerEvent(event)) {
-        return;
-      }
-      const point = anchorPointFromMouseEvent(event);
-      lastUtilityAnchorRef.current =
-        point === null
-          ? null
-          : {
-              point,
-              side: lastLineSelectionAnchorRef.current?.side ?? "top",
-            };
+      pointerStartedInContainerRef.current = true;
+      pointerIsDownRef.current = true;
     },
     [enabled],
   );
@@ -331,21 +503,11 @@ export function usePierreLineSelectionActions({
       if (!enabled) {
         return;
       }
-      if (isGutterUtilityPointerEvent(event)) {
-        const point = anchorPointFromMouseEvent(event);
-        lastUtilityAnchorRef.current =
-          point === null
-            ? null
-            : {
-                point,
-                side: lastLineSelectionAnchorRef.current?.side ?? "top",
-              };
-        return;
-      }
       const pointerStartPoint =
         pointerStartPointRef.current ?? documentPointerStartPoint;
       pointerStartPointRef.current = null;
       documentPointerStartPoint = null;
+      pointerIsDownRef.current = false;
       if (pointerStartPoint === null) {
         return;
       }
@@ -365,25 +527,76 @@ export function usePierreLineSelectionActions({
     [enabled],
   );
 
+  const dismissSelection = useCallback(() => {
+    setActiveRange(null);
+    setPreviewRange(null);
+    setActiveSelection(null);
+    currentLineRangeRef.current = null;
+    pointerStartPointRef.current = null;
+    lastPointerReleaseAnchorRef.current = null;
+    lastLineSelectionAnchorRef.current = null;
+    lineSelectionStartRangeRef.current = null;
+    documentPointerStartPoint = null;
+    documentPointerReleaseAnchor = null;
+  }, []);
+
+  const reportDomSelection = useCallback(
+    (anchor: SelectionAnchor | null = null) => {
+      if (currentLineRangeRef.current !== null) {
+        return;
+      }
+      const containerElement = containerRef.current;
+      const domResult = readDomSelectionInContainer({
+        containerElement,
+        content,
+        anchor,
+      });
+      if (domResult !== null) {
+        setActiveRange(domResult.range);
+        setPreviewRange(domResult.range);
+        setActiveSelection(domResult.selection);
+      } else if (activeSelection !== null) {
+        dismissSelection();
+      }
+    },
+    [activeSelection, containerRef, content, dismissSelection],
+  );
+
   useEffect(() => {
     if (!enabled || typeof document === "undefined") {
       return;
     }
 
-    const handleDocumentPointerDown = (event: PointerEvent) => {
-      const path = event.composedPath();
-      if (isGutterUtilityPath(path)) {
-        return;
+    let reportFrame: number | null = null;
+    const cancelReportFrame = () => {
+      if (reportFrame !== null) {
+        window.cancelAnimationFrame(reportFrame);
+        reportFrame = null;
       }
+    };
+    const scheduleReportDomSelection = (anchor: SelectionAnchor | null = null) => {
+      cancelReportFrame();
+      reportFrame = window.requestAnimationFrame(() => {
+        reportFrame = null;
+        reportDomSelection(anchor);
+      });
+    };
+
+    const handleDocumentPointerDown = (event: PointerEvent) => {
+      cancelReportFrame();
       const point = anchorPointFromMouseEvent(event);
       documentPointerReleaseAnchor = null;
       pointerStartPointRef.current = point;
       documentPointerStartPoint = point;
+      pointerIsDownRef.current = true;
+      const container = containerRef.current;
+      pointerStartedInContainerRef.current =
+        container !== null &&
+        nodeContainsOrShadowContains(container, event.target as Node);
     };
+
     const handleDocumentPointerUp = (event: PointerEvent) => {
-      if (isGutterUtilityPath(event.composedPath())) {
-        return;
-      }
+      pointerIsDownRef.current = false;
       const pointerStartPoint =
         pointerStartPointRef.current ?? documentPointerStartPoint;
       pointerStartPointRef.current = null;
@@ -395,28 +608,40 @@ export function usePierreLineSelectionActions({
         pointerStartPoint,
         event,
       );
-      if (anchor === null) {
-        return;
+      if (anchor !== null) {
+        lastPointerReleaseAnchorRef.current = anchor;
+        documentPointerReleaseAnchor = anchor;
+        if (currentLineRangeRef.current !== null) {
+          lastLineSelectionAnchorRef.current = anchor;
+        }
       }
-      lastPointerReleaseAnchorRef.current = anchor;
-      documentPointerReleaseAnchor = anchor;
-      if (currentLineRangeRef.current !== null) {
-        lastLineSelectionAnchorRef.current = anchor;
+      if (pointerStartedInContainerRef.current) {
+        scheduleReportDomSelection(anchor);
       }
     };
+
     const handleDocumentPointerCancel = () => {
+      cancelReportFrame();
+      pointerIsDownRef.current = false;
       pointerStartPointRef.current = null;
       documentPointerStartPoint = null;
+      pointerStartedInContainerRef.current = false;
+    };
+
+    const handleSelectionChange = () => {
+      if (pointerIsDownRef.current) {
+        return;
+      }
+      scheduleReportDomSelection();
     };
 
     document.addEventListener("pointerdown", handleDocumentPointerDown, true);
     document.addEventListener("pointerup", handleDocumentPointerUp, true);
-    document.addEventListener(
-      "pointercancel",
-      handleDocumentPointerCancel,
-      true,
-    );
+    document.addEventListener("pointercancel", handleDocumentPointerCancel, true);
+    document.addEventListener("selectionchange", handleSelectionChange);
+
     return () => {
+      cancelReportFrame();
       document.removeEventListener(
         "pointerdown",
         handleDocumentPointerDown,
@@ -428,87 +653,9 @@ export function usePierreLineSelectionActions({
         handleDocumentPointerCancel,
         true,
       );
+      document.removeEventListener("selectionchange", handleSelectionChange);
     };
-  }, [enabled]);
-
-  const dismissSelection = useCallback(() => {
-    setActiveRange(null);
-    setPreviewRange(null);
-    setActiveSelection(null);
-    currentLineRangeRef.current = null;
-    pointerStartPointRef.current = null;
-    lastPointerReleaseAnchorRef.current = null;
-    lastLineSelectionAnchorRef.current = null;
-    lastUtilityAnchorRef.current = null;
-    lineSelectionStartRangeRef.current = null;
-    documentPointerStartPoint = null;
-    documentPointerReleaseAnchor = null;
-  }, []);
-
-  const handleGutterUtilityClick = useCallback(
-    (range: SelectedLineRange) => {
-      if (!enabled) {
-        return;
-      }
-      const containerElement = containerRef.current;
-      const selectionText =
-        buildSelectionText(range) ??
-        buildFallbackSelectionText?.({
-          containerElement,
-          range,
-        }) ??
-        "";
-      const pointerAnchor =
-        lastLineSelectionAnchorRef.current ??
-        lastPointerReleaseAnchorRef.current ??
-        documentPointerReleaseAnchor;
-      const interactionAnchor = pointerAnchor ?? lastUtilityAnchorRef.current;
-      const rangeAnchorSide =
-        anchorSideFromSelectionStart({
-          range,
-          startRange: lineSelectionStartRangeRef.current,
-        }) ?? anchorSideFromLineRange(range);
-      const anchorSide =
-        pointerAnchor?.side ??
-        rangeAnchorSide ??
-        lastUtilityAnchorRef.current?.side ??
-        "top";
-      const resolvedAnchorPoint =
-        resolveSelectedLineAnchorPoint({
-          anchorSide,
-          containerElement,
-        }) ??
-        resolveUtilityButtonAnchorPoint({
-          anchorSide,
-          containerElement,
-        }) ??
-        interactionAnchor?.point ??
-        null;
-      const anchor =
-        resolvedAnchorPoint === null
-          ? interactionAnchor
-          : { point: resolvedAnchorPoint, side: anchorSide };
-      const selection = buildMenuSelection({
-        anchor,
-        containerElement,
-        text: selectionText,
-      });
-      if (selection === null) {
-        suppressedSelectionEndRangeRef.current = range;
-        setActiveRange(null);
-        setPreviewRange(null);
-        setActiveSelection(null);
-        currentLineRangeRef.current = null;
-        return;
-      }
-      suppressedSelectionEndRangeRef.current = null;
-      currentLineRangeRef.current = range;
-      setActiveRange(range);
-      setPreviewRange(range);
-      setActiveSelection(selection);
-    },
-    [buildFallbackSelectionText, buildSelectionText, containerRef, enabled],
-  );
+  }, [containerRef, enabled, reportDomSelection]);
 
   const handleLineSelectionStart = useCallback(
     (range: SelectedLineRange | null) => {
@@ -543,6 +690,10 @@ export function usePierreLineSelectionActions({
       if (!enabled) {
         return;
       }
+      if (range === null) {
+        dismissSelection();
+        return;
+      }
       if (
         areSelectedLineRangesEqual(
           range,
@@ -550,27 +701,105 @@ export function usePierreLineSelectionActions({
         )
       ) {
         suppressedSelectionEndRangeRef.current = null;
-        currentLineRangeRef.current = null;
-        setPreviewRange(null);
+        dismissSelection();
         return;
       }
       currentLineRangeRef.current = range;
-      const pointerAnchor =
-        lastPointerReleaseAnchorRef.current ?? documentPointerReleaseAnchor;
-      if (range !== null && pointerAnchor !== null) {
-        lastLineSelectionAnchorRef.current = pointerAnchor;
+      const containerElement = containerRef.current;
+      const selectionText =
+        buildSelectionText(range) ??
+        buildFallbackSelectionText?.({
+          containerElement,
+          range,
+        }) ??
+        "";
+      if (selectionText.trim().length === 0) {
+        suppressedSelectionEndRangeRef.current = range;
+        dismissSelection();
+        return;
       }
+
+      const pointerAnchor =
+        lastLineSelectionAnchorRef.current ??
+        lastPointerReleaseAnchorRef.current ??
+        documentPointerReleaseAnchor;
+      const rangeAnchorSide =
+        anchorSideFromSelectionStart({
+          range,
+          startRange: lineSelectionStartRangeRef.current,
+        }) ?? anchorSideFromLineRange(range);
+      const anchorSide: SelectionAnchorSide =
+        pointerAnchor?.side ?? rangeAnchorSide ?? "top";
+      const resolvedAnchorPoint =
+        resolveSelectedLineAnchorPoint({
+          anchorSide,
+          containerElement,
+          range,
+        }) ??
+        pointerAnchor?.point ??
+        null;
+      const anchor: SelectionAnchor | null =
+        resolvedAnchorPoint === null
+          ? pointerAnchor
+          : { point: resolvedAnchorPoint, side: anchorSide };
+      const selection = buildMenuSelection({
+        anchor,
+        containerElement,
+        text: selectionText,
+      });
+      if (selection === null) {
+        suppressedSelectionEndRangeRef.current = range;
+        dismissSelection();
+        return;
+      }
+      suppressedSelectionEndRangeRef.current = null;
+      setActiveRange(range);
       setPreviewRange(range);
+      setActiveSelection(selection);
     },
-    [enabled],
+    [
+      buildFallbackSelectionText,
+      buildSelectionText,
+      containerRef,
+      dismissSelection,
+      enabled,
+    ],
   );
 
   const handleSelectionAddToChat = useCallback(
     (text: string) => {
-      onSelectionAddToChat?.(text);
+      const currentRange =
+        activeRange ?? previewRange ?? currentLineRangeRef.current ?? undefined;
+      const resolvedText =
+        currentRange !== undefined
+          ? buildSelectionText(currentRange) ?? text
+          : text;
       dismissSelection();
+      if (filePath !== undefined) {
+        onSelectionAddToChat?.(resolvedText, currentRange, filePath);
+      } else {
+        onSelectionAddToChat?.(resolvedText, currentRange);
+      }
     },
-    [dismissSelection, onSelectionAddToChat],
+    [activeRange, buildSelectionText, dismissSelection, filePath, onSelectionAddToChat, previewRange],
+  );
+
+  const handleSelectionAddToSideChat = useCallback(
+    (text: string) => {
+      const currentRange =
+        activeRange ?? previewRange ?? currentLineRangeRef.current ?? undefined;
+      const resolvedText =
+        currentRange !== undefined
+          ? buildSelectionText(currentRange) ?? text
+          : text;
+      dismissSelection();
+      if (filePath !== undefined) {
+        onSelectionAddToSideChat?.(resolvedText, currentRange, filePath);
+      } else {
+        onSelectionAddToSideChat?.(resolvedText, currentRange);
+      }
+    },
+    [activeRange, buildSelectionText, dismissSelection, filePath, onSelectionAddToSideChat, previewRange],
   );
 
   const menu = useMemo(
@@ -583,6 +812,11 @@ export function usePierreLineSelectionActions({
               ? undefined
               : handleSelectionAddToChat
           }
+          onAddToSideChat={
+            onSelectionAddToSideChat === undefined
+              ? undefined
+              : handleSelectionAddToSideChat
+          }
           onDismiss={dismissSelection}
         />
       ) : null,
@@ -591,19 +825,19 @@ export function usePierreLineSelectionActions({
       dismissSelection,
       enabled,
       handleSelectionAddToChat,
+      handleSelectionAddToSideChat,
       onSelectionAddToChat,
+      onSelectionAddToSideChat,
     ],
   );
 
   return {
     menu,
-    onGutterUtilityClick: handleGutterUtilityClick,
     onLineSelectionChange: handleLineSelectionChange,
     onLineSelectionEnd: handleLineSelectionEnd,
     onLineSelectionStart: handleLineSelectionStart,
     onPointerDownCapture: handlePointerDownCapture,
-    onPointerMoveCapture: handlePointerMoveCapture,
     onPointerUpCapture: handlePointerUpCapture,
-    selectedRange: activeRange ?? previewRange,
+    selectedRange: previewRange ?? activeRange,
   };
 }

@@ -81,7 +81,11 @@ interface FilePreviewProps {
   path: string;
   copyPath?: string | null;
   headerMode?: FilePreviewHeaderMode;
-  onSelectionAddToChat?: (text: string) => void;
+  onSelectionAddToChat?: (
+    text: string,
+    range?: { start: number; end: number },
+    filePath?: string,
+  ) => void;
   onOpenInEditor?: (path: string) => void;
   onRefresh?: () => void;
   isRefreshing?: boolean;
@@ -95,12 +99,20 @@ interface FilePreviewBodyProps {
   lineOverflowMode: CodeOverflowMode;
   viewMode: FilePreviewViewMode;
   markdownLinkRouting?: MarkdownLinkRouting;
-  onSelectionAddToChat?: (text: string) => void;
+  onSelectionAddToChat?: (
+    text: string,
+    range?: { start: number; end: number },
+    filePath?: string,
+  ) => void;
 }
 
 interface HtmlFilePreviewBodyProps {
   lineOverflowMode: CodeOverflowMode;
-  onSelectionAddToChat?: (text: string) => void;
+  onSelectionAddToChat?: (
+    text: string,
+    range?: { start: number; end: number },
+    filePath?: string,
+  ) => void;
   state: Extract<FilePreviewState, { kind: "html" }>;
   viewMode: FilePreviewViewMode;
 }
@@ -135,14 +147,22 @@ interface FilePreviewPathProps {
 
 interface MarkdownFilePreviewProps {
   file: FilePreviewFile;
-  onSelectionAddToChat?: (text: string) => void;
+  onSelectionAddToChat?: (
+    text: string,
+    range?: { start: number; end: number },
+    filePath?: string,
+  ) => void;
   urlTransform?: UrlTransform;
   markdownLinkRouting?: MarkdownLinkRouting;
 }
 
 interface CsvFilePreviewProps {
   file: FilePreviewFile;
-  onSelectionAddToChat?: (text: string) => void;
+  onSelectionAddToChat?: (
+    text: string,
+    range?: { start: number; end: number },
+    filePath?: string,
+  ) => void;
 }
 
 interface FilePreviewImageProps {
@@ -164,7 +184,11 @@ interface FilePreviewCodeProps {
   file: FilePreviewFile;
   lineOverflowMode: CodeOverflowMode;
   lineRange: FilePreviewLineRange | null;
-  onSelectionAddToChat?: (text: string) => void;
+  onSelectionAddToChat?: (
+    text: string,
+    range?: { start: number; end: number },
+    filePath?: string,
+  ) => void;
   path: string;
 }
 
@@ -897,7 +921,13 @@ function MarkdownFilePreview({
   markdownLinkRouting,
 }: MarkdownFilePreviewProps) {
   return (
-    <SecondaryPanelSelectionActions onSelectionAddToChat={onSelectionAddToChat}>
+    <SecondaryPanelSelectionActions
+      onSelectionAddToChat={
+        onSelectionAddToChat === undefined
+          ? undefined
+          : (text) => onSelectionAddToChat(text, undefined, file.name)
+      }
+    >
       <div className="flex-auto bg-background px-4 py-4">
         <MarkdownPreview
           allowHtml
@@ -942,7 +972,13 @@ function CsvFilePreview({ file, onSelectionAddToChat }: CsvFilePreviewProps) {
       : totalRowsHeight - lastVirtualRow.end;
 
   return (
-    <SecondaryPanelSelectionActions onSelectionAddToChat={onSelectionAddToChat}>
+    <SecondaryPanelSelectionActions
+      onSelectionAddToChat={
+        onSelectionAddToChat === undefined
+          ? undefined
+          : (text) => onSelectionAddToChat(text, undefined, file.name)
+      }
+    >
       {}
       <div className="flex min-h-0 flex-auto flex-col bg-surface-raised px-4 py-4">
         {}

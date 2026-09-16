@@ -12,6 +12,7 @@ import { resetDeprecatedAliasWarningsForTests } from "@/lib/plugin-sdk-deprecate
 import { PluginSourceCode } from "@/components/plugin/PluginSourceCode";
 import { SourceCodeHost } from "./SourceCodeHost";
 import { makePluginRegistrationSet } from "@/test/fixtures/plugins";
+import { MemoryRouter } from "react-router-dom";
 
 const bbSourceCode = vi.hoisted(() => ({
   loaded: false,
@@ -155,7 +156,11 @@ describe("experimental_SourceCode", () => {
       return <div data-testid="plugin-source">plugin source</div>;
     });
 
-    render(<PluginSourceCode content={CONTENT} path="src/app.ts" />);
+    render(
+      <MemoryRouter>
+        <PluginSourceCode content={CONTENT} path="src/app.ts" />
+      </MemoryRouter>,
+    );
 
     await screen.findByTestId("plugin-source");
     expect(received.at(-1)?.content).toBe(CONTENT);

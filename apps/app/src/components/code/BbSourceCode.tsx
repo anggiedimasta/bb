@@ -242,6 +242,7 @@ function BbSourceCode({
   className,
   scrollToHighlightedLines = false,
   onSelectionAddToChat,
+  onSelectionAddToSideChat,
 }: BbSourceCodeProps) {
   const fileCacheKey = cacheKey ?? path;
   const file = useMemo<PierreFileContents>(
@@ -270,8 +271,13 @@ function BbSourceCode({
   const lineSelectionActions = usePierreLineSelectionActions({
     buildSelectionText,
     containerRef,
-    enabled: onSelectionAddToChat !== undefined,
+    content,
+    filePath: path,
+    enabled:
+      onSelectionAddToChat !== undefined ||
+      onSelectionAddToSideChat !== undefined,
     onSelectionAddToChat,
+    onSelectionAddToSideChat,
   });
   const baseOptions = useMemo<FileOptions<undefined>>(
     () => ({
@@ -279,15 +285,15 @@ function BbSourceCode({
       theme: codeTheme,
       overflow,
       disableFileHeader: true,
-      enableGutterUtility: onSelectionAddToChat !== undefined,
       enableLineSelection:
-        highlightedLines !== null || onSelectionAddToChat !== undefined,
+        highlightedLines !== null ||
+        onSelectionAddToChat !== undefined ||
+        onSelectionAddToSideChat !== undefined,
       lineHoverHighlight:
-        onSelectionAddToChat === undefined ? "disabled" : "number",
-      onGutterUtilityClick:
-        onSelectionAddToChat === undefined
-          ? undefined
-          : lineSelectionActions.onGutterUtilityClick,
+        onSelectionAddToChat === undefined &&
+        onSelectionAddToSideChat === undefined
+          ? "disabled"
+          : "number",
       onLineSelectionChange: lineSelectionActions.onLineSelectionChange,
       onLineSelectionEnd: lineSelectionActions.onLineSelectionEnd,
       onLineSelectionStart: lineSelectionActions.onLineSelectionStart,
@@ -296,11 +302,11 @@ function BbSourceCode({
       codeTheme,
       highlightedLines,
       overflow,
-      lineSelectionActions.onGutterUtilityClick,
       lineSelectionActions.onLineSelectionChange,
       lineSelectionActions.onLineSelectionEnd,
       lineSelectionActions.onLineSelectionStart,
       onSelectionAddToChat,
+      onSelectionAddToSideChat,
       preferredTheme,
     ],
   );
@@ -452,7 +458,6 @@ function BbSourceCode({
       style={SOURCE_VIEW_STYLE}
       data-bb-source-code-line-number={targetLineNumber ?? undefined}
       onPointerDownCapture={lineSelectionActions.onPointerDownCapture}
-      onPointerMoveCapture={lineSelectionActions.onPointerMoveCapture}
       onPointerUpCapture={lineSelectionActions.onPointerUpCapture}
     >
       <PierreWorkerPoolBoundary>

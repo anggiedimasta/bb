@@ -46,7 +46,11 @@ interface GitDiffTabContentProps {
   onClearPendingGitDiffIntent?: () => void;
   onOpenFileInEditor?: (path: string) => void;
   onOpenFilePreview?: (path: string) => void;
-  onSelectionAddToChat?: (text: string) => void;
+  onSelectionAddToChat?: (
+    text: string,
+    range?: { start: number; end: number },
+    filePath?: string,
+  ) => void;
   pendingGitDiffScrollPath?: string | null;
   workspaceRootPath?: string | null;
 }
@@ -58,7 +62,11 @@ interface WorkspaceFilePreviewTabContentProps {
   environmentId?: string | null;
   lineRange: FilePreviewLineRange | null;
   markdownLinkRouting?: MarkdownLinkRouting;
-  onSelectionAddToChat?: (text: string) => void;
+  onSelectionAddToChat?: (
+    text: string,
+    range?: { start: number; end: number },
+    filePath?: string,
+  ) => void;
   onOpenInEditor?: (path: string) => void;
   source: EnvironmentFilePreviewSource | null;
   statusLabel: WorkspaceFilePreviewStatusLabel | null;
@@ -72,7 +80,11 @@ interface ProjectFilePreviewTabContentProps {
   environmentId: string | null;
   hostId: string | null;
   lineRange: FilePreviewLineRange | null;
-  onSelectionAddToChat?: (text: string) => void;
+  onSelectionAddToChat?: (
+    text: string,
+    range?: { start: number; end: number },
+    filePath?: string,
+  ) => void;
   onOpenInEditor?: (path: string) => void;
   projectId: string;
 }
@@ -84,7 +96,11 @@ interface HostFilePreviewTabContentProps {
   environmentId?: string | null;
   lineRange: FilePreviewLineRange | null;
   markdownLinkRouting?: MarkdownLinkRouting;
-  onSelectionAddToChat?: (text: string) => void;
+  onSelectionAddToChat?: (
+    text: string,
+    range?: { start: number; end: number },
+    filePath?: string,
+  ) => void;
   onOpenInEditor?: (path: string) => void;
   threadId: string;
 }
@@ -103,7 +119,11 @@ interface ThreadStorageFilePreviewTabContentProps {
   copyPath?: string | null;
   lineRange: FilePreviewLineRange | null;
   markdownLinkRouting?: MarkdownLinkRouting;
-  onSelectionAddToChat?: (text: string) => void;
+  onSelectionAddToChat?: (
+    text: string,
+    range?: { start: number; end: number },
+    filePath?: string,
+  ) => void;
   onOpenInEditor?: (path: string) => void;
   threadId: string;
 }

@@ -8,6 +8,7 @@ import {
 import {
   findLocalPathProjectSourceForHost,
   type EnvironmentStatus,
+  type PromptMentionResource,
   type Host,
   type ProviderInfo,
   type ReasoningLevel,
@@ -706,8 +707,56 @@ function RootComposeSurface({
     [promptBoxRef, promptDraft.storageKey, setStartedComposing],
   );
   const handleRootPanelSelectionAddToChat = useCallback(
-    (text: string, attachments?: readonly PromptDraftAttachment[]) => {
-      promptDraft.addQuote(text, attachments);
+    (
+      text: string,
+      attachmentsOrRange?:
+        | readonly PromptDraftAttachment[]
+        | { start: number; end: number },
+      filePath?: string,
+    ) => {
+      if (
+        attachmentsOrRange !== undefined &&
+        !Array.isArray(attachmentsOrRange) &&
+        "start" in attachmentsOrRange
+      ) {
+        const range = attachmentsOrRange;
+        let targetPath = filePath;
+        if (!targetPath) {
+          const firstLine = text.split("\n")[0] ?? "";
+          const colonMatch = firstLine.match(/^([^:\s]+):(\d+)(?:-(\d+))?$/);
+          if (colonMatch && colonMatch[1]) {
+            targetPath = colonMatch[1];
+          }
+        }
+        if (targetPath) {
+          const startLineNumber = Math.min(range.start, range.end);
+          const endLineNumber = Math.max(range.start, range.end);
+          const fileName = targetPath.split(/[\\/]/).pop() ?? targetPath;
+          const lineRangeLabel =
+            startLineNumber === endLineNumber
+              ? `:${startLineNumber}`
+              : `:${startLineNumber}-${endLineNumber}`;
+
+          const resource: PromptMentionResource = {
+            kind: "path",
+            entryKind: "file",
+            path: targetPath,
+            label: `${fileName}${lineRangeLabel}`,
+            source: "workspace",
+            lineRange: {
+              startLineNumber,
+              endLineNumber,
+            },
+          };
+          promptDraft.addMention(resource);
+        } else {
+          promptDraft.addQuote(text);
+        }
+      } else if (Array.isArray(attachmentsOrRange)) {
+        promptDraft.addQuote(text, attachmentsOrRange);
+      } else {
+        promptDraft.addQuote(text);
+      }
       setStartedComposing(true);
       window.requestAnimationFrame(() => promptBoxRef.current?.focusEnd());
     },

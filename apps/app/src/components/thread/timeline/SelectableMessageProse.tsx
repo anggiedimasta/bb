@@ -56,7 +56,7 @@ export function isSelectionWithinNode(
 export function firstClientRect(range: Range): DOMRect | null {
   const rects = range.getClientRects();
   for (let index = 0; index < rects.length; index += 1) {
-    const rect = rects.item(index);
+    const rect = typeof rects.item === "function" ? rects.item(index) : (rects[index] ?? null);
     if (rect === null) {
       continue;
     }

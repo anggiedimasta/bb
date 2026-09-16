@@ -33,6 +33,7 @@ export function BbDiff({
   showLineNumbers,
   className,
   onSelectionAddToChat,
+  onSelectionAddToSideChat,
 }: BbDiffProps) {
   const oldPath = fullFileContents?.old.path;
   const oldContent = fullFileContents?.old.content;
@@ -84,8 +85,13 @@ export function BbDiff({
     buildFallbackSelectionText,
     buildSelectionText,
     containerRef,
-    enabled: onSelectionAddToChat !== undefined,
+    content: patchText,
+    filePath: file.name,
+    enabled:
+      onSelectionAddToChat !== undefined ||
+      onSelectionAddToSideChat !== undefined,
     onSelectionAddToChat,
+    onSelectionAddToSideChat,
   });
   const baseOptions = useMemo<FileDiffOptions<undefined>>(
     () => ({
@@ -96,14 +102,14 @@ export function BbDiff({
       ...(expansionLineCount === undefined ? {} : { expansionLineCount }),
       themeType,
       theme: codeTheme,
-      enableGutterUtility: onSelectionAddToChat !== undefined,
-      enableLineSelection: onSelectionAddToChat !== undefined,
+      enableLineSelection:
+        onSelectionAddToChat !== undefined ||
+        onSelectionAddToSideChat !== undefined,
       lineHoverHighlight:
-        onSelectionAddToChat === undefined ? "disabled" : "number",
-      onGutterUtilityClick:
-        onSelectionAddToChat === undefined
-          ? undefined
-          : lineSelectionActions.onGutterUtilityClick,
+        onSelectionAddToChat === undefined &&
+        onSelectionAddToSideChat === undefined
+          ? "disabled"
+          : "number",
       onLineSelectionChange: lineSelectionActions.onLineSelectionChange,
       onLineSelectionEnd: lineSelectionActions.onLineSelectionEnd,
       onLineSelectionStart: lineSelectionActions.onLineSelectionStart,
@@ -111,11 +117,11 @@ export function BbDiff({
     [
       codeTheme,
       expansionLineCount,
-      lineSelectionActions.onGutterUtilityClick,
       lineSelectionActions.onLineSelectionChange,
       lineSelectionActions.onLineSelectionEnd,
       lineSelectionActions.onLineSelectionStart,
       onSelectionAddToChat,
+      onSelectionAddToSideChat,
       overflow,
       showLineNumbers,
       themeType,
@@ -132,7 +138,6 @@ export function BbDiff({
       ref={containerRef}
       className={cn("overflow-x-auto", className)}
       onPointerDownCapture={lineSelectionActions.onPointerDownCapture}
-      onPointerMoveCapture={lineSelectionActions.onPointerMoveCapture}
       onPointerUpCapture={lineSelectionActions.onPointerUpCapture}
     >
       <div className="w-full max-w-full" style={DIFF_VIEW_STYLE}>

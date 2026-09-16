@@ -30,7 +30,11 @@ interface FilePreviewBaseProps {
   isRefreshing?: boolean;
   lineRange?: FilePreviewLineRange | null;
   markdownLinkRouting?: MarkdownLinkRouting;
-  onSelectionAddToChat?: (text: string) => void;
+  onSelectionAddToChat?: (
+    text: string,
+    range?: { start: number; end: number },
+    filePath?: string,
+  ) => void;
   onOpenInEditor?: (path: string) => void;
   onRefresh?: () => void;
 }
