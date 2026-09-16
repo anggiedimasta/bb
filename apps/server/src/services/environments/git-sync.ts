@@ -131,25 +131,6 @@ async function hasUpstream(
   return result.exitCode === 0 && trim(result.stdout).length > 0;
 }
 
-async function isWorkingTreeClean(
-  runGit: RunGitSyncCommand,
-  cwd: string,
-  timeoutMs: number,
-): Promise<boolean> {
-  const result = await runGit(
-    ["--no-optional-locks", "status", "--porcelain"],
-    { cwd, timeoutMs },
-  );
-  if (result.exitCode !== 0) {
-    throw new GitSyncError(
-      "git_sync_failed",
-      firstNonEmptyMessage(result.stderr, result.stdout) ||
-        "Failed to read git status.",
-    );
-  }
-  return trim(result.stdout).length === 0;
-}
-
 async function abortRebaseIfInProgress(
   runGit: RunGitSyncCommand,
   cwd: string,
@@ -212,15 +193,10 @@ export async function syncGitBranch(
     };
   }
 
-  if (!(await isWorkingTreeClean(runGit, cwd, timeoutMs))) {
-    throw new GitSyncError(
-      "git_sync_dirty_worktree",
-      "Cannot sync with uncommitted changes. Commit or stash them first, then sync.",
-      409,
-    );
-  }
-
-  const pull = await runGit(["pull", "--rebase"], { cwd, timeoutMs });
+  const pull = await runGit(["pull", "--rebase", "--autostash"], {
+    cwd,
+    timeoutMs,
+  });
   if (pull.exitCode !== 0) {
     await abortRebaseIfInProgress(runGit, cwd, timeoutMs);
     const detail = firstNonEmptyMessage(pull.stderr, pull.stdout);
@@ -236,6 +212,16 @@ export async function syncGitBranch(
       detail || "git pull --rebase failed.",
     );
   }
+
+  const combinedOutput = `${pull.stdout}\n${pull.stderr}`;
+  if (/Applying autostash resulted in conflicts/i.test(combinedOutput)) {
+    throw new GitSyncError(
+      "git_sync_conflict",
+      "Autostash resulted in conflicts when applying local changes. Your changes are safe in the stash.",
+      409,
+    );
+  }
+
   const pullSummary = summarizePull(pull.stdout);
 
   const push = await runGit(["push"], { cwd, timeoutMs });

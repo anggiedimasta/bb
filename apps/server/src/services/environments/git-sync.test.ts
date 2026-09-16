@@ -36,15 +36,14 @@ const CLEAN_ENV = {
   "rev-parse --abbrev-ref --symbolic-full-name @{upstream}": {
     stdout: "origin/feature/topic\n",
   },
-  "--no-optional-locks status --porcelain": { stdout: "" },
 } satisfies Record<string, StubResponse>;
 
 describe("syncGitBranch", () => {
-  it("runs fetch, pull --rebase, then push in order and never forces", async () => {
+  it("runs fetch, pull --rebase --autostash, then push in order and never forces", async () => {
     const { runGit, calls } = createRunGit({
       responses: {
         ...CLEAN_ENV,
-        "pull --rebase": { stdout: "Successfully rebased and updated." },
+        "pull --rebase --autostash": { stdout: "Successfully rebased and updated." },
         push: { stderr: "To github.com\n   abc123..def456  feature/topic" },
       },
     });
@@ -56,8 +55,7 @@ describe("syncGitBranch", () => {
       "fetch --prune",
       "rev-parse --abbrev-ref HEAD",
       "rev-parse --abbrev-ref --symbolic-full-name @{upstream}",
-      "--no-optional-locks status --porcelain",
-      "pull --rebase",
+      "pull --rebase --autostash",
       "push",
     ]);
     for (const args of calls) {
@@ -72,7 +70,7 @@ describe("syncGitBranch", () => {
     const { runGit, calls } = createRunGit({
       responses: {
         ...CLEAN_ENV,
-        "pull --rebase": {
+        "pull --rebase --autostash": {
           exitCode: 1,
           stderr:
             "CONFLICT (content): Merge conflict in src/app.ts\nerror: could not apply ...",
@@ -102,22 +100,46 @@ describe("syncGitBranch", () => {
     }
   });
 
-  it("refuses to sync when the working tree is dirty", async () => {
+  it("syncs successfully with autostash even when there are uncommitted changes", async () => {
     const { runGit, calls } = createRunGit({
       responses: {
         ...CLEAN_ENV,
-        "--no-optional-locks status --porcelain": {
-          stdout: " M src/app.ts\n",
+        "pull --rebase --autostash": {
+          stdout:
+            "Created autostash: 1234567\nSuccessfully rebased and updated.\nApplied autostash.",
+        },
+        push: { stderr: "Everything up-to-date" },
+      },
+    });
+
+    const result = await syncGitBranch({ cwd: "/repo", runGit });
+    expect(result.pulled).toBe(true);
+    expect(result.pushed).toBe(false);
+
+    const commands = calls.map((args) => args.join(" "));
+    expect(commands).toContain("pull --rebase --autostash");
+    expect(commands).toContain("push");
+  });
+
+  it("reports a conflict error when autostash results in conflicts", async () => {
+    const { runGit, calls } = createRunGit({
+      responses: {
+        ...CLEAN_ENV,
+        "pull --rebase --autostash": {
+          stdout:
+            "Successfully rebased and updated.\nApplying autostash resulted in conflicts.\nYour changes are safe in the stash.",
         },
       },
     });
 
     await expect(
       syncGitBranch({ cwd: "/repo", runGit }),
-    ).rejects.toMatchObject({ code: "git_sync_dirty_worktree", status: 409 });
+    ).rejects.toMatchObject({
+      code: "git_sync_conflict",
+      status: 409,
+    });
 
     const commands = calls.map((args) => args.join(" "));
-    expect(commands).not.toContain("pull --rebase");
     expect(commands).not.toContain("push");
   });
 
@@ -125,7 +147,7 @@ describe("syncGitBranch", () => {
     const { runGit, calls } = createRunGit({
       responses: {
         ...CLEAN_ENV,
-        "pull --rebase": { stdout: "Already up to date." },
+        "pull --rebase --autostash": { stdout: "Already up to date." },
         push: {
           exitCode: 1,
           stderr:
@@ -161,7 +183,7 @@ describe("syncGitBranch", () => {
     expect(result.message).toBe("Nothing to sync");
 
     const commands = calls.map((args) => args.join(" "));
-    expect(commands).not.toContain("pull --rebase");
+    expect(commands).not.toContain("pull --rebase --autostash");
     expect(commands).not.toContain("push");
   });
 
@@ -169,7 +191,7 @@ describe("syncGitBranch", () => {
     const { runGit } = createRunGit({
       responses: {
         ...CLEAN_ENV,
-        "pull --rebase": { stdout: "Already up to date." },
+        "pull --rebase --autostash": { stdout: "Already up to date." },
         push: { stderr: "Everything up-to-date" },
       },
     });
