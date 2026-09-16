@@ -12,6 +12,7 @@ import {
   pluginCatalogCategoryIdSchema,
   pluginPackageJsonSchema,
 } from "@bb/domain";
+import type { PluginPackageJson } from "@bb/domain";
 import { z } from "zod";
 import {
   BUNDLED_MARKETPLACE_FILENAME,
@@ -204,6 +205,38 @@ export async function readBundledPluginOverview(
   return overview;
 }
 
+const GITHUB_URL_PATTERN =
+  /^https?:\/\/(?:www\.)?github\.com\/([A-Za-z0-9-]+)(?:\/.*)?$/u;
+
+export function bundledPluginAuthor(
+  manifestAuthor: PluginPackageJson["author"],
+): { name: string; github?: string; url?: string } {
+  const fallback = { name: "BB" };
+  if (manifestAuthor === undefined) return fallback;
+
+  const name =
+    typeof manifestAuthor === "string"
+      ? manifestAuthor.replace(/\s*<[^>]*>/u, "").replace(/\s*\([^)]*\)/u, "").trim()
+      : manifestAuthor.name.trim();
+  if (name.length === 0) return fallback;
+
+  const url =
+    typeof manifestAuthor === "string"
+      ? manifestAuthor.match(/\(([^)]+)\)/u)?.[1]?.trim()
+      : manifestAuthor.url?.trim();
+
+  const author: { name: string; github?: string; url?: string } = { name };
+  if (url !== undefined && url.length > 0) {
+    const github = url.match(GITHUB_URL_PATTERN)?.[1];
+    if (github !== undefined) {
+      author.github = github;
+    } else if (url.startsWith("https://")) {
+      author.url = url;
+    }
+  }
+  return author;
+}
+
 function marketplaceIcon(pluginName: string, declared: string) {
   if (!isPluginOwnedIconPath(declared)) return declared;
   const relative = declared.replace(/^\.\//u, "");
@@ -262,7 +295,7 @@ export async function generateBbOfficialMarketplace(args: {
         description: manifest.bb.description,
         icon: marketplaceIcon(plugin.name, declaredIcon),
         tags: [],
-        author: { name: "BB" },
+        author: bundledPluginAuthor(manifest.author),
         source: { bundled: { plugin: plugin.name } },
         category: catalog.category,
         screenshots: catalog.screenshots,

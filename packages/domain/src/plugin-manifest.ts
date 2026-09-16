@@ -104,10 +104,22 @@ const pluginBbManifestSchema = z
   })
   .strict();
 
+const pluginAuthorSchema = z.union([
+  requiredManifestString,
+  z
+    .object({
+      name: requiredManifestString,
+      email: z.string().optional(),
+      url: z.string().optional(),
+    })
+    .passthrough(),
+]);
+
 export const pluginPackageJsonSchema = z
   .object({
     name: requiredManifestString,
     version: requiredManifestString,
+    author: pluginAuthorSchema.optional(),
     engines: z
       .object({
         bb: requiredManifestString.optional(),

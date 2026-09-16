@@ -4,9 +4,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { PLUGIN_CATALOG_CATEGORIES } from "@bb/domain";
+import { PLUGIN_CATALOG_CATEGORIES, pluginPackageJsonSchema } from "@bb/domain";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  bundledPluginAuthor,
   generateBbOfficialMarketplace,
   parseBbOfficialCatalogFields,
   readBundledPluginOverview,
@@ -76,8 +77,39 @@ describe("bb-official marketplace generator", () => {
       );
       expect(entry?.id).toBe(plugin.pluginId);
       expect(entry?.screenshots).toEqual(fields[plugin.name]?.screenshots);
-      expect(entry?.author).toEqual({ name: "BB" });
+      const manifest = pluginPackageJsonSchema.parse(
+        JSON.parse(
+          await readFile(
+            new URL(
+              `../../../../../plugins/${plugin.name}/package.json`,
+              import.meta.url,
+            ),
+            "utf8",
+          ),
+        ),
+      );
+      expect(entry?.author).toEqual(bundledPluginAuthor(manifest.author));
     }
+  });
+
+  it("derives the marketplace author from the plugin manifest", () => {
+    expect(bundledPluginAuthor(undefined)).toEqual({ name: "BB" });
+    expect(bundledPluginAuthor("")).toEqual({ name: "BB" });
+    expect(bundledPluginAuthor("Mateo Cerquetella")).toEqual({
+      name: "Mateo Cerquetella",
+    });
+    expect(
+      bundledPluginAuthor("Ada Lovelace <ada@example.com> (https://example.com)"),
+    ).toEqual({ name: "Ada Lovelace", url: "https://example.com" });
+    expect(
+      bundledPluginAuthor("Grace <g@x.io> (https://github.com/grace)"),
+    ).toEqual({ name: "Grace", github: "grace" });
+    expect(
+      bundledPluginAuthor({ name: "Linus", url: "http://insecure.example" }),
+    ).toEqual({ name: "Linus" });
+    expect(
+      bundledPluginAuthor({ name: "Torvalds", url: "https://github.com/torvalds/x" }),
+    ).toEqual({ name: "Torvalds", github: "torvalds" });
   });
 
   it("rejects missing and unknown catalog blocks", () => {
